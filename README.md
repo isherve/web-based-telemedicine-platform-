@@ -66,6 +66,26 @@ npm run dev
 - Health check: http://localhost:4000/api/health
 
 The SQLite database is created automatically at `server/data/gara.db` on first run.
+Demo data (patients, consultations, pharmacy stock, notifications) is seeded on first
+backend start.
+
+### Environment (optional online features)
+Copy `server/.env.example` → `server/.env` and set:
+- `GROQ_API_KEY` — enables live AI (triage, chatbots, doctor suggestions)
+- `GMAIL_SMTP_USER` / `GMAIL_SMTP_PASS` — enables email OTP for password reset
+
+### Demo accounts
+
+| Role | Login | Password |
+|------|-------|----------|
+| Doctor | `doctor@gara.rw` | `docpass123` |
+| Finance | `fin@gara.rw` | `secret123` |
+| Pharmacy | `pharma@gara.rw` | `secret123` |
+| Patient | `+250788333444` | `Patient@123` |
+| Patient | `+250788555666` | `Patient@123` |
+| Patient | `+250788111222` | `pass123` |
+
+Staff registration tokens (in `server/.env`): `gara-doctor-2026`, `gara-finance-2026`, `gara-pharmacy-2026`.
 
 ### Doctor registration token
 Doctor sign-up requires the one-time token in `server/.env`
