@@ -167,6 +167,81 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- Vitals / measurements tracked over time (BP, HR, temp, weight, sugar, SpO2).
+CREATE TABLE IF NOT EXISTS vitals (
+  id              TEXT PRIMARY KEY,
+  patient_id      TEXT REFERENCES profiles(id),
+  consultation_id TEXT REFERENCES consultations(id),
+  recorded_by     TEXT REFERENCES profiles(id),
+  systolic        INTEGER,
+  diastolic       INTEGER,
+  heart_rate      INTEGER,
+  temperature     REAL,
+  weight          REAL,
+  blood_sugar     REAL,
+  spo2            INTEGER,
+  note            TEXT,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- Structured e-prescriptions (header + line items) — richer than a PDF blob.
+CREATE TABLE IF NOT EXISTS prescriptions (
+  id              TEXT PRIMARY KEY,
+  consultation_id TEXT REFERENCES consultations(id),
+  patient_id      TEXT REFERENCES profiles(id),
+  doctor_id       TEXT REFERENCES profiles(id),
+  status          TEXT NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active','dispensed','cancelled')),
+  note            TEXT,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS prescription_items (
+  id              TEXT PRIMARY KEY,
+  prescription_id TEXT REFERENCES prescriptions(id),
+  medicine_id     TEXT REFERENCES medicines(id),
+  medicine_name   TEXT NOT NULL,
+  dosage          TEXT,
+  frequency       TEXT,
+  duration        TEXT,
+  quantity        INTEGER NOT NULL DEFAULT 1,
+  instructions    TEXT,
+  dispensed       INTEGER NOT NULL DEFAULT 0
+);
+
+-- Lab test orders + results.
+CREATE TABLE IF NOT EXISTS lab_orders (
+  id              TEXT PRIMARY KEY,
+  consultation_id TEXT REFERENCES consultations(id),
+  patient_id      TEXT REFERENCES profiles(id),
+  doctor_id       TEXT REFERENCES profiles(id),
+  test_name       TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'ordered'
+                    CHECK (status IN ('ordered','completed','cancelled')),
+  result          TEXT,
+  result_at       TEXT,
+  note            TEXT,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- Scheduled reminders (medication + appointment) surfaced as notifications.
+CREATE TABLE IF NOT EXISTS reminders (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT REFERENCES profiles(id),
+  title        TEXT NOT NULL,
+  body         TEXT,
+  kind         TEXT NOT NULL DEFAULT 'medication',
+  due_at       TEXT NOT NULL,
+  sent         INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_vitals_patient ON vitals(patient_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON prescriptions(patient_id, status);
+CREATE INDEX IF NOT EXISTS idx_prescription_items_rx ON prescription_items(prescription_id);
+CREATE INDEX IF NOT EXISTS idx_lab_orders_patient ON lab_orders(patient_id, status);
+CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at, sent);
+
 -- Helpful indexes for the queue/dashboard queries.
 CREATE INDEX IF NOT EXISTS idx_consultations_doctor ON consultations(doctor_id, status);
 CREATE INDEX IF NOT EXISTS idx_consultations_patient ON consultations(patient_id, status);

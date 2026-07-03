@@ -203,6 +203,21 @@ export function AuthPage() {
                 {mode === 'login' ? t('auth.noAccount') : t('auth.haveAccount')}
               </button>
             </div>
+
+            {/* Quick doctor account setup shortcut */}
+            {mode === 'login' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('register');
+                  setRegRole('doctor');
+                  setError(null);
+                }}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-200 bg-brand-50/50 px-4 py-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+              >
+                🩺 {t('auth.imADoctor')} — {t('auth.createAccount')}
+              </button>
+            )}
           </div>
         )}
       </div>

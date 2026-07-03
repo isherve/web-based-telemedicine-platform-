@@ -1,0 +1,19 @@
+{
+  "name": "Gara — Telemedicine",
+  "short_name": "Gara",
+  "description": "Care that comes to you. Offline-first telemedicine for Rwanda.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f9d77",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

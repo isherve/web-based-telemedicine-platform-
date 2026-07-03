@@ -1,10 +1,67 @@
+// Supported languages across the platform. Offline fallbacks only ship English
+// + Kinyarwanda copy, so French degrades to the English offline path, but the
+// online (Groq) path replies fully in French.
+export type Lang = 'en' | 'rw' | 'fr';
+
+/**
+ * Language name embedded in AI system prompts. For Kinyarwanda we add an explicit
+ * guard: general LLMs tend to drift into Swahili when asked for "Kinyarwanda", so
+ * we spell out that it must be pure Ikinyarwanda as spoken in Rwanda.
+ */
+export function langName(l: Lang): string {
+  if (l === 'rw')
+    return 'Kinyarwanda (reply ONLY in pure Ikinyarwanda as spoken in Rwanda; do NOT use Swahili, English or French words — keep medical terms simple)';
+  if (l === 'fr') return 'French';
+  return 'English';
+}
+
+/** Coerce arbitrary request input to a supported language. */
+export function normLang(v: unknown): Lang {
+  return v === 'rw' ? 'rw' : v === 'fr' ? 'fr' : 'en';
+}
+
+/**
+ * The AI chatbots operate in English and French only (Kinyarwanda is disabled
+ * for AI). This maps the UI language to a supported chatbot language so both the
+ * online and offline paths never reply in Kinyarwanda.
+ */
+export function chatLang(l: Lang): Lang {
+  return l === 'fr' ? 'fr' : 'en';
+}
+
+/**
+ * Instruction for conversational assistants: reply in whichever supported
+ * language the user actually writes in (English or French), falling back to the
+ * selected language when the message language is unclear. Kinyarwanda is not
+ * offered by the AI chatbots.
+ */
+export function multilingualDirective(preferred: Lang): string {
+  const fallback = preferred === 'fr' ? 'French' : 'English';
+  return `CRITICAL LANGUAGE RULE: You must reply ONLY in English or French. NEVER reply in Kinyarwanda, Swahili, or any other language. If the user writes in French, reply in French. In every other case — including when the user writes in Kinyarwanda, Swahili, mixes languages, or the language is unclear — reply in ${fallback}.`;
+}
+
+/** "General guidance, not a diagnosis" disclaimer, localized. */
+function generalDisclaimer(l: Lang): string {
+  if (l === 'rw') return 'Ibi ni inama rusange — si isuzuma. Muganga wawe niwe ufata icyemezo.';
+  if (l === 'fr')
+    return 'Conseils généraux uniquement — pas un diagnostic. Votre médecin prend la décision finale.';
+  return 'General guidance only — not a diagnosis. Your doctor makes the final decision.';
+}
+
+/** "Gara assistant, not a doctor" disclaimer, localized. */
+function assistantDisclaimer(l: Lang): string {
+  if (l === 'rw') return 'Ni umufasha wa Gara — si muganga.';
+  if (l === 'fr') return 'Assistant Gara — pas un médecin.';
+  return 'Gara assistant — not a doctor.';
+}
+
 interface TriageInput {
   biologicalSex: string;
   severity: string;
   duration: string;
   symptomCategory: string;
   symptomDescription: string;
-  language: 'en' | 'rw';
+  language: Lang;
 }
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -17,7 +74,7 @@ export async function generateAiBrief(input: TriageInput): Promise<string> {
   const groqKey = process.env.GROQ_API_KEY?.trim();
   if (!groqKey) return buildOfflineBrief(input);
 
-  const lang = input.language === 'rw' ? 'Kinyarwanda' : 'English';
+  const lang = langName(input.language);
   const system = `You are a clinical documentation assistant. Produce a concise, structured summary of what the patient reported. Do NOT make diagnostic assertions here. Output in ${lang}.`;
   return callGroq(groqKey, system, formatTriage(input)).catch(() => buildOfflineBrief(input));
 }
@@ -31,7 +88,7 @@ export async function generateDiseaseSuggestions(input: TriageInput): Promise<st
   const groqKey = process.env.GROQ_API_KEY?.trim();
   if (!groqKey) return buildOfflineSuggestions(input);
 
-  const lang = input.language === 'rw' ? 'Kinyarwanda' : 'English';
+  const lang = langName(input.language);
   const system = `You are a clinical decision-support assistant for a doctor in Rwanda. Based on the patient's triage, list 3-5 possible conditions to consider (a differential), most likely first. For each, give a one-line reason referencing the reported symptoms. End with a short disclaimer that this is not a diagnosis and clinical judgement is required. Be concise. Output in ${lang}.`;
   return callGroq(groqKey, system, formatTriage(input)).catch(() => buildOfflineSuggestions(input));
 }
@@ -274,8 +331,9 @@ const TRIAGE_FIELDS: (keyof TriageChatDraft)[] = [
 export async function triageChatbot(
   messages: ChatTurn[],
   draft: TriageChatDraft,
-  language: 'en' | 'rw'
+  uiLanguage: Lang
 ): Promise<TriageChatResult> {
+  const language = chatLang(uiLanguage);
   const groqKey = process.env.GROQ_API_KEY?.trim();
   if (groqKey && messages.length > 0) {
     try {
@@ -299,8 +357,9 @@ export async function patientAssistant(
   },
   messages: ChatTurn[],
   question: string,
-  language: 'en' | 'rw'
+  uiLanguage: Lang
 ): Promise<AssistantResult> {
+  const language = chatLang(uiLanguage);
   const groqKey = process.env.GROQ_API_KEY?.trim();
   if (groqKey) {
     try {
@@ -324,8 +383,9 @@ export async function doctorReplySuggestions(
     patientChronic: string | null;
   },
   chatMessages: { senderIsDoctor: boolean; content: string }[],
-  language: 'en' | 'rw'
+  uiLanguage: Lang
 ): Promise<DoctorSuggestionsResult> {
+  const language = chatLang(uiLanguage);
   const groqKey = process.env.GROQ_API_KEY?.trim();
   if (groqKey) {
     try {
@@ -343,9 +403,8 @@ async function triageChatbotGroq(
   apiKey: string,
   messages: ChatTurn[],
   draft: TriageChatDraft,
-  language: 'en' | 'rw'
+  language: Lang
 ): Promise<TriageChatResult> {
-  const lang = language === 'rw' ? 'Kinyarwanda' : 'English';
   const system = `You are Gara, a friendly telehealth triage assistant in Rwanda. Guide the patient through collecting:
 - biologicalSex: male or female
 - severity: mild, moderate, or severe
@@ -359,7 +418,7 @@ Ask ONE question at a time. Be warm and concise. Output ONLY valid JSON:
 {"reply":"your message","draft":{"biologicalSex?":"","severity?":"","duration?":"","symptomCategory?":"","symptomDescription?":""},"readyToSubmit":false,"quickReplies":["option1","option2"]}
 
 Merge new info into draft from the patient's answers. Set readyToSubmit true only when all 5 fields are filled, then summarize and ask them to confirm.
-Language: ${lang}. quickReplies should be short labels in ${lang}.`;
+${multilingualDirective(language)} quickReplies should be short labels in the same language you reply in.`;
 
   const groqMessages = [
     { role: 'system' as const, content: system },
@@ -381,12 +440,11 @@ async function patientAssistantGroq(
   ctx: Parameters<typeof patientAssistant>[0],
   messages: ChatTurn[],
   question: string,
-  language: 'en' | 'rw'
+  language: Lang
 ): Promise<AssistantResult> {
-  const lang = language === 'rw' ? 'Kinyarwanda' : 'English';
   const system = `You are Gara Health Assistant helping a patient during a telemedicine consultation in Rwanda.
 You are NOT a doctor. Give general health information, explain medical terms simply, suggest when to seek emergency care, and remind them their doctor will make final decisions.
-Never prescribe specific drugs or dosages. Be concise (2-4 sentences). Language: ${lang}.
+Never prescribe specific drugs or dosages. Be concise (2-4 sentences). ${multilingualDirective(language)}
 
 Patient context:
 - Symptoms: ${ctx.symptomCategory ?? 'unknown'} — ${ctx.symptomDescription ?? ''}
@@ -401,20 +459,16 @@ ${ctx.aiSuggestions ? `- AI differential (for reference): ${ctx.aiSuggestions.sl
     { role: 'user' as const, content: question },
   ];
   const reply = await callGroqChat(apiKey, groqMessages, 0.5, 400);
-  const disclaimer =
-    language === 'rw'
-      ? 'Ibi ni inama rusange — si isuzuma. Muganga wawe niwe ufata icyemezo.'
-      : 'General guidance only — not a diagnosis. Your doctor makes the final decision.';
-  return { reply, disclaimer };
+  return { reply, disclaimer: generalDisclaimer(language) };
 }
 
 async function doctorSuggestionsGroq(
   apiKey: string,
   ctx: Parameters<typeof doctorReplySuggestions>[0],
   chatMessages: { senderIsDoctor: boolean; content: string }[],
-  language: 'en' | 'rw'
+  language: Lang
 ): Promise<DoctorSuggestionsResult> {
-  const lang = language === 'rw' ? 'Kinyarwanda' : 'English';
+  const lang = langName(language);
   const history = chatMessages
     .slice(-8)
     .map((m) => `${m.senderIsDoctor ? 'Doctor' : 'Patient'}: ${m.content}`)
@@ -481,7 +535,7 @@ function isDraftComplete(d: TriageChatDraft): boolean {
 function triageChatbotOffline(
   messages: ChatTurn[],
   draft: TriageChatDraft,
-  language: 'en' | 'rw'
+  language: Lang
 ): TriageChatResult {
   const rw = language === 'rw';
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -608,7 +662,7 @@ function parseCategory(text: string): string | undefined {
 function patientAssistantOffline(
   ctx: Parameters<typeof patientAssistant>[0],
   question: string,
-  language: 'en' | 'rw'
+  language: Lang
 ): AssistantResult {
   const rw = language === 'rw';
   const q = question.toLowerCase();
@@ -651,7 +705,7 @@ function patientAssistantOffline(
 function doctorSuggestionsOffline(
   ctx: Parameters<typeof doctorReplySuggestions>[0],
   chatMessages: { senderIsDoctor: boolean; content: string }[],
-  language: 'en' | 'rw'
+  language: Lang
 ): DoctorSuggestionsResult {
   const rw = language === 'rw';
   const lastPatient = [...chatMessages].reverse().find((m) => !m.senderIsDoctor)?.content;
@@ -690,6 +744,85 @@ function doctorSuggestionsOffline(
   };
 }
 
+// ---- Patient → doctor assignment rationale ----
+
+export interface AssignmentRationaleInput {
+  urgency: string;
+  symptomCategory: string | null;
+  candidates: {
+    name: string;
+    onDuty: boolean;
+    load: number;
+    rating: number | null;
+    reasons: string[];
+  }[];
+  language: Lang;
+}
+
+/**
+ * Natural-language explanation of the assignment recommendation. Uses Groq when
+ * available for a fluent rationale, otherwise a deterministic offline summary
+ * built from the schedule/workload scoring.
+ */
+export async function assignmentRationale(input: AssignmentRationaleInput): Promise<string> {
+  if (input.candidates.length === 0) {
+    return input.language === 'rw'
+      ? 'Nta muganga uhari ushobora guhabwa umurwayi ubu.'
+      : 'No doctors are available to take this patient right now.';
+  }
+  const groqKey = process.env.GROQ_API_KEY?.trim();
+  if (groqKey) {
+    try {
+      return await assignmentRationaleGroq(groqKey, input);
+    } catch {
+      // fall through to offline
+    }
+  }
+  return assignmentRationaleOffline(input);
+}
+
+async function assignmentRationaleGroq(
+  apiKey: string,
+  input: AssignmentRationaleInput
+): Promise<string> {
+  const lang = langName(input.language);
+  const roster = input.candidates
+    .map(
+      (c, i) =>
+        `${i + 1}. ${c.name} — ${c.onDuty ? 'on duty' : 'off schedule'}, load ${c.load}, rating ${
+          c.rating != null ? c.rating.toFixed(1) : 'n/a'
+        }`
+    )
+    .join('\n');
+  const system = `You are a triage coordinator for a telemedicine clinic in Rwanda. Recommend which doctor should take a patient, based on who is ON DUTY (per their schedule), who has the lightest workload, and who has the best rating. Prioritize on-duty doctors with low load, and give urgent cases to the most available doctor. Answer in 2-3 short sentences naming the recommended doctor and why. Language: ${lang}.`;
+  const user = `Case urgency: ${input.urgency}. Symptom: ${input.symptomCategory ?? 'unspecified'}.
+Available doctors (best-first by our scoring):
+${roster}
+
+Recommend the best doctor and explain briefly.`;
+  return callGroqChat(
+    apiKey,
+    [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    0.3,
+    250
+  );
+}
+
+function assignmentRationaleOffline(input: AssignmentRationaleInput): string {
+  const rw = input.language === 'rw';
+  const best = input.candidates[0];
+  const urgent = input.urgency === 'high';
+  const prefix = urgent ? (rw ? '🚨 Ikibazo cyihutirwa. ' : '🚨 Urgent case. ') : '';
+  const why = best.reasons.join(rw ? '; ' : '; ');
+  if (rw) {
+    return `${prefix}Nasabye ${best.name} — ${why}. Ni we ukwiye kubona uyu murwayi ubu ukurikije gahunda n'umutwaro w'akazi.`;
+  }
+  return `${prefix}Recommend ${best.name} — ${why}. Best match right now based on schedule and current workload.`;
+}
+
 /** Global page assistant — role-aware help on any screen. */
 export async function generalAssistant(
   role: string,
@@ -697,8 +830,9 @@ export async function generalAssistant(
   page: string,
   messages: ChatTurn[],
   question: string,
-  language: 'en' | 'rw'
+  uiLanguage: Lang
 ): Promise<AssistantResult> {
+  const language = chatLang(uiLanguage);
   const groqKey = process.env.GROQ_API_KEY?.trim();
   if (groqKey) {
     try {
@@ -717,9 +851,8 @@ async function generalAssistantGroq(
   page: string,
   messages: ChatTurn[],
   question: string,
-  language: 'en' | 'rw'
+  language: Lang
 ): Promise<AssistantResult> {
-  const lang = language === 'rw' ? 'Kinyarwanda' : 'English';
   const roleGuide: Record<string, string> = {
     patient:
       'Help patients use Gara: triage, booking, payment (MoMo/Airtel), chat with doctor, AI health assistant, appointments, medicines, follow-ups, profile, data export.',
@@ -729,12 +862,14 @@ async function generalAssistantGroq(
       'Help finance staff: verify payments, view transactions, income trends, outstanding payments, pharmacy revenue, tariff reference, PDF reports.',
     pharmacy:
       'Help pharmacy staff: stock management, dispensing, prescriptions queue, low-stock alerts, analytics, PDF reports.',
+    admin:
+      'Help the administrator: system overview stats, user management, changing user roles, doctor leaderboard, audit log, and monitoring platform activity.',
   };
 
   const system = `You are Gara AI, a helpful assistant for the Gara telemedicine platform in Rwanda.
 User: ${userName ?? 'User'} | Role: ${role} | Current page: ${page}
 ${roleGuide[role] ?? 'Help navigate the Gara platform.'}
-Answer concisely (2-4 sentences). Language: ${lang}. Never diagnose or prescribe.`;
+Answer concisely (2-4 sentences). ${multilingualDirective(language)} Never diagnose or prescribe.`;
 
   const groqMessages = [
     { role: 'system' as const, content: system },
@@ -744,10 +879,7 @@ Answer concisely (2-4 sentences). Language: ${lang}. Never diagnose or prescribe
   const reply = await callGroqChat(apiKey, groqMessages, 0.5, 350);
   return {
     reply,
-    disclaimer:
-      language === 'rw'
-        ? 'Ni umufasha wa Gara — si muganga.'
-        : 'Gara assistant — not a doctor.',
+    disclaimer: assistantDisclaimer(language),
   };
 }
 
@@ -755,7 +887,7 @@ function generalAssistantOffline(
   role: string,
   page: string,
   question: string,
-  language: 'en' | 'rw'
+  language: Lang
 ): AssistantResult {
   const rw = language === 'rw';
   const q = question.toLowerCase();
@@ -776,6 +908,10 @@ function generalAssistantOffline(
     pharmacy: {
       en: 'As pharmacy: manage Stock, dispense medicines from Prescriptions queue, check Low stock alerts.',
       rw: 'Nk\'umutoza miti: cunga Stock, tanga imiti kuva kuri Prescriptions, reba Low stock.',
+    },
+    admin: {
+      en: 'As admin: use Overview for system stats, Users to manage accounts and change roles, Doctors for the leaderboard, and Audit log to track activity.',
+      rw: 'Nk\'umuyobozi: koresha Overview ku mibare, Users gucunga konti no guhindura inshingano, Doctors ku rutonde, na Audit log gukurikirana ibikorwa.',
     },
   };
 

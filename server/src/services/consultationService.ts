@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '../db/client.js';
-import { generateAiBrief, generateDiseaseSuggestions, scoreUrgency } from './aiService.js';
+import { generateAiBrief, generateDiseaseSuggestions, scoreUrgency, type Lang } from './aiService.js';
 import { createNotification } from './notificationService.js';
 import { emitToConsultation } from '../realtime/io.js';
 import { mapConsultation } from '../utils/mappers.js';
@@ -18,6 +18,33 @@ function getDoctor() {
     | undefined;
   if (!row) throw new ServiceError(503, 'No doctor registered on this instance.');
   return row;
+}
+
+/**
+ * Choose the doctor for a fresh triage. With a single doctor this is a no-op.
+ * With multiple doctors, the AI assigner reads each doctor's schedule + workload
+ * and auto-picks the best on-duty doctor. Lazy import avoids a load-time cycle.
+ */
+async function pickIntakeDoctor(): Promise<Record<string, unknown>> {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM profiles WHERE is_doctor = 1').get() as
+    | { n: number }
+    | undefined;
+  if ((count?.n ?? 0) <= 1) return getDoctor();
+
+  try {
+    const { listDoctorCandidates } = await import('./assignmentService.js');
+    const ranked = listDoctorCandidates();
+    const best = ranked.find((c) => c.availableToday) ?? ranked[0];
+    if (best) {
+      const row = db.prepare('SELECT * FROM profiles WHERE id = ?').get(best.id) as
+        | Record<string, unknown>
+        | undefined;
+      if (row) return row;
+    }
+  } catch {
+    // fall back to the default doctor if scoring fails
+  }
+  return getDoctor();
 }
 
 function getConsultationRow(id: string) {
@@ -44,10 +71,10 @@ export async function submitTriage(
     duration: string;
     symptomCategory: string;
     symptomDescription: string;
-    language: 'en' | 'rw';
+    language: Lang;
   }
 ) {
-  const doctor = getDoctor();
+  const doctor = await pickIntakeDoctor();
   const id = randomUUID();
   const now = new Date().toISOString();
   const fee = (doctor.consultation_fee as number) ?? 5000;
@@ -379,6 +406,21 @@ export function updateDoctorProfile(
   if (input.clinicName != null) {
     db.prepare('UPDATE profiles SET clinic_name = ? WHERE id = ?').run(input.clinicName, doctorId);
   }
+}
+
+/**
+ * Finance-managed clinic tariff. Finance staff own billing, so they may edit the
+ * clinic-wide consultation fee, MoMo number and clinic name (applied to the
+ * doctor/clinic profile). Returns the updated clinic profile row.
+ */
+export function updateClinicTariff(input: {
+  consultationFee?: number;
+  momoNumber?: string;
+  clinicName?: string;
+}) {
+  const doctor = getDoctor();
+  updateDoctorProfile(doctor.id as string, input);
+  return db.prepare('SELECT * FROM profiles WHERE id = ?').get(doctor.id) as Record<string, unknown>;
 }
 
 /** Full longitudinal history for one patient (doctor view of a returning patient). */

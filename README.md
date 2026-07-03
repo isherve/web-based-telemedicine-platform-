@@ -78,6 +78,7 @@ Copy `server/.env.example` → `server/.env` and set:
 
 | Role | Login | Password |
 |------|-------|----------|
+| Admin | `admin@gara.rw` | `admin123` |
 | Doctor | `doctor@gara.rw` | `docpass123` |
 | Finance | `fin@gara.rw` | `secret123` |
 | Pharmacy | `pharma@gara.rw` | `secret123` |

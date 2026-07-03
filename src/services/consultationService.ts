@@ -72,6 +72,10 @@ export const consultationService = {
   updateDoctorProfile: (body: { consultationFee?: number; momoNumber?: string; clinicName?: string }) =>
     api.patch<{ doctor: Profile }>('/consultations/doctor/profile', body).then((r) => r.doctor),
 
+  // Finance-managed clinic tariff (fee, MoMo number, clinic name).
+  updateClinicTariff: (body: { consultationFee?: number; momoNumber?: string; clinicName?: string }) =>
+    api.patch<{ doctor: Profile }>('/consultations/clinic/tariff', body).then((r) => r.doctor),
+
   // --- Phase 11 additions ---
   getQueuePosition: (id: string) => api.get<QueuePosition>(`/consultations/${id}/queue-position`),
 

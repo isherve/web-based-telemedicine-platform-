@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Dispense, Medicine, PharmacyReport, Prescription } from '../../data/types';
+import type { Dispense, EPrescription, Medicine, PharmacyReport, Prescription } from '../../data/types';
 import { pharmacyService } from '../../services/pharmacyService';
+import { clinicalService } from '../../services/clinicalService';
 import { reportService } from '../../services/reportService';
 import { downloadBlob, generatePharmacyReportPdf } from '../../services/pdfService';
 import { useAuth } from '../../state/AuthProvider';
 import { useLocale } from '../../state/LocaleProvider';
 import { AppShell } from '../components/AppShell';
 import { ProfilePanel } from '../components/ProfilePanel';
+import { tabClass, ROLE_ACCENT_BORDER } from '../theme';
+import { PrescriptionCard } from '../components/Prescriptions';
 import { ApiError } from '../../data/api';
 
 type Tab =
   | 'overview'
   | 'stock'
   | 'dispense'
+  | 'eprescriptions'
   | 'prescriptions'
   | 'lowstock'
   | 'history'
@@ -24,6 +28,7 @@ const PHARMACY_TABS: Tab[] = [
   'overview',
   'stock',
   'dispense',
+  'eprescriptions',
   'prescriptions',
   'lowstock',
   'history',
@@ -39,6 +44,7 @@ export function PharmacyDashboard() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [dispenses, setDispenses] = useState<Dispense[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [ePrescriptions, setEPrescriptions] = useState<EPrescription[]>([]);
   const [report, setReport] = useState<PharmacyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +67,13 @@ export function PharmacyDashboard() {
     setDispenses(hist);
     setPrescriptions(presc);
     setReport(rep);
+    clinicalService.activePrescriptions().then(setEPrescriptions).catch(() => setEPrescriptions([]));
   }, []);
+
+  async function dispenseRx(id: string) {
+    await clinicalService.dispensePrescription(id);
+    refresh();
+  }
 
   useEffect(() => {
     refresh();
@@ -127,7 +139,7 @@ export function PharmacyDashboard() {
     <AppShell onLogout={() => logout()}>
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className={`border-l-4 pl-3 ${ROLE_ACCENT_BORDER.pharmacy}`}>
             <h1 className="text-2xl font-bold text-slate-800">{t('pharmacy.title')}</h1>
             <p className="text-sm text-slate-500">{profile?.fullName}</p>
           </div>
@@ -147,7 +159,7 @@ export function PharmacyDashboard() {
           {PHARMACY_TABS.map((tb) => (
             <button
               key={tb}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab === tb ? 'bg-brand-500 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+              className={tabClass('pharmacy', tab === tb)}
               onClick={() => setTab(tb)}
             >
               {t(`pharmacy.tab.${tb}`)}
@@ -248,6 +260,18 @@ export function PharmacyDashboard() {
               {lastDispensed && <p className="text-sm text-brand-600">✓ {lastDispensed}</p>}
               <button className="btn-primary" onClick={doDispense}>{t('pharmacy.dispense')}</button>
             </div>
+          </div>
+        )}
+
+        {tab === 'eprescriptions' && (
+          <div className="mt-6 space-y-3">
+            {ePrescriptions.length === 0 ? (
+              <p className="card p-6 text-center text-slate-500">{t('pharmacy.noPrescriptions')}</p>
+            ) : (
+              ePrescriptions.map((rx) => (
+                <PrescriptionCard key={rx.id} rx={rx} onDispense={dispenseRx} showPatient />
+              ))
+            )}
           </div>
         )}
 

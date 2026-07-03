@@ -30,6 +30,12 @@ export function runMigrations(): void {
     'ALTER TABLE profiles ADD COLUMN chronic_conditions TEXT',
     'ALTER TABLE profiles ADD COLUMN ai_consent INTEGER DEFAULT 0',
     'ALTER TABLE profiles ADD COLUMN consented_at TEXT',
+    'ALTER TABLE profiles ADD COLUMN insurance_provider TEXT',
+    'ALTER TABLE profiles ADD COLUMN insurance_number TEXT',
+    'ALTER TABLE profiles ADD COLUMN insurance_scheme TEXT',
+    'ALTER TABLE consultations ADD COLUMN insurance_provider TEXT',
+    'ALTER TABLE consultations ADD COLUMN insurance_covered_percent INTEGER DEFAULT 0',
+    'ALTER TABLE consultations ADD COLUMN insurance_claim_id TEXT',
   ]) {
     try {
       db.exec(stmt);

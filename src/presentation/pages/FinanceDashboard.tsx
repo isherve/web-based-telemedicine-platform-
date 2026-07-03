@@ -3,6 +3,7 @@ import type { Consultation, FinancialReport, PharmacyReport, Profile } from '../
 import { financeService } from '../../services/pharmacyService';
 import { reportService } from '../../services/reportService';
 import { consultationService } from '../../services/consultationService';
+import { ApiError } from '../../data/api';
 import {
   downloadBlob,
   generateFinancialReportPdf,
@@ -12,11 +13,14 @@ import { useAuth } from '../../state/AuthProvider';
 import { useLocale } from '../../state/LocaleProvider';
 import { AppShell } from '../components/AppShell';
 import { ProfilePanel } from '../components/ProfilePanel';
+import { AssignmentsPanel } from '../components/AssignmentsPanel';
 import { joinUser, useSocketEvent } from '../../hooks/useSocket';
+import { tabClass, ROLE_ACCENT_BORDER } from '../theme';
 
 type Tab =
   | 'overview'
   | 'verify'
+  | 'assignments'
   | 'transactions'
   | 'income'
   | 'outstanding'
@@ -28,6 +32,7 @@ type Tab =
 const FINANCE_TABS: Tab[] = [
   'overview',
   'verify',
+  'assignments',
   'transactions',
   'income',
   'outstanding',
@@ -98,23 +103,50 @@ export function FinanceDashboard() {
   return (
     <AppShell onLogout={() => logout()}>
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <h1 className="text-2xl font-bold text-slate-800">{t('finance.title')}</h1>
-        <p className="text-sm text-slate-500">{profile?.fullName}</p>
+        <div className={`border-l-4 pl-3 ${ROLE_ACCENT_BORDER.finance}`}>
+          <h1 className="text-2xl font-bold text-slate-800">{t('finance.title')}</h1>
+          <p className="text-sm text-slate-500">{profile?.fullName}</p>
+        </div>
 
         {report && (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Metric label={t('doctor.today')} value={`${report.todayIncome.toLocaleString()} RWF`} />
-            <Metric label={t('doctor.month')} value={`${report.monthIncome.toLocaleString()} RWF`} />
-            <Metric label={t('finance.total')} value={`${report.totalIncome.toLocaleString()} RWF`} />
-            <Metric label={t('finance.pending')} value={String(report.pendingConsultations)} />
-          </div>
+          <>
+            {/* Grand total — all money collected across the system */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-brand-600 to-emerald-600 p-5 text-white shadow-sm">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-white/80">
+                  {t('finance.grandTotal')}
+                </p>
+                <p className="text-3xl font-extrabold">
+                  {(report.totalIncome + (report.pharmacyRevenue ?? 0)).toLocaleString()} RWF
+                </p>
+                <p className="mt-1 text-xs text-white/80">{t('finance.grandTotalDesc')}</p>
+              </div>
+              <div className="flex gap-4 text-right">
+                <div>
+                  <p className="text-xs text-white/70">{t('finance.consultationIncome')}</p>
+                  <p className="text-lg font-bold">{report.totalIncome.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/70">{t('finance.pharmacyRevenueLabel')}</p>
+                  <p className="text-lg font-bold">{(report.pharmacyRevenue ?? 0).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Metric label={t('doctor.today')} value={`${report.todayIncome.toLocaleString()} RWF`} />
+              <Metric label={t('doctor.month')} value={`${report.monthIncome.toLocaleString()} RWF`} />
+              <Metric label={t('finance.total')} value={`${report.totalIncome.toLocaleString()} RWF`} />
+              <Metric label={t('finance.pending')} value={String(report.pendingConsultations)} />
+            </div>
+          </>
         )}
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
           {FINANCE_TABS.map((tb) => (
             <button
               key={tb}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab === tb ? 'bg-brand-500 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+              className={tabClass('finance', tab === tb)}
               onClick={() => setTab(tb)}
             >
               {t(`finance.tab.${tb}`)}
@@ -123,10 +155,46 @@ export function FinanceDashboard() {
         </div>
 
         {tab === 'overview' && report && (
-          <div className="card mt-6 overflow-hidden">
-            <div className="border-b border-slate-100 p-4 font-semibold text-slate-700">
-              {t('finance.recent')}
+          <div className="mt-6 space-y-4">
+            {/* Money totals breakdown */}
+            <div className="card p-5">
+              <h3 className="mb-3 font-semibold text-slate-700">{t('finance.moneyBreakdown')}</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between border-b border-slate-100 py-2">
+                  <span className="text-slate-600">{t('finance.consultationIncome')}</span>
+                  <span className="font-semibold">{report.totalIncome.toLocaleString()} RWF</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 py-2">
+                  <span className="text-slate-600">{t('finance.pharmacyRevenueLabel')}</span>
+                  <span className="font-semibold">{(report.pharmacyRevenue ?? 0).toLocaleString()} RWF</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 py-2">
+                  <span className="text-slate-600">{t('finance.paidConsultations')}</span>
+                  <span className="font-semibold">{report.paidConsultations}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 py-2">
+                  <span className="text-slate-600">{t('finance.avgPerConsultation')}</span>
+                  <span className="font-semibold">
+                    {(report.paidConsultations
+                      ? Math.round(report.totalIncome / report.paidConsultations)
+                      : 0
+                    ).toLocaleString()}{' '}
+                    RWF
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2">
+                  <span className="font-bold text-slate-800">{t('finance.grandTotal')}</span>
+                  <span className="text-lg font-extrabold text-brand-600">
+                    {(report.totalIncome + (report.pharmacyRevenue ?? 0)).toLocaleString()} RWF
+                  </span>
+                </div>
+              </div>
             </div>
+
+            <div className="card overflow-hidden">
+              <div className="border-b border-slate-100 p-4 font-semibold text-slate-700">
+                {t('finance.recent')}
+              </div>
             <div className="divide-y divide-slate-100">
               {report.recent.length === 0 ? (
                 <p className="p-6 text-center text-slate-500">{t('finance.noPayments')}</p>
@@ -143,6 +211,7 @@ export function FinanceDashboard() {
                   </div>
                 ))
               )}
+              </div>
             </div>
           </div>
         )}
@@ -278,25 +347,10 @@ export function FinanceDashboard() {
           </div>
         )}
 
+        {tab === 'assignments' && <AssignmentsPanel />}
+
         {tab === 'tariff' && (
-          <div className="card mt-6 p-5">
-            <h3 className="font-semibold text-slate-700">{t('tariff.reference')}</h3>
-            <p className="mt-1 text-sm text-slate-500">{t('finance.tariffDesc')}</p>
-            <div className="mt-4 rounded-xl bg-brand-50 p-4 text-sm">
-              <div className="flex justify-between border-b border-brand-100 py-2">
-                <span className="text-slate-600">{t('tariff.consultation')}</span>
-                <span className="font-semibold">{(doctor?.consultationFee ?? 0).toLocaleString()} RWF</span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-slate-600">{t('payment.momo')}</span>
-                <span className="font-mono font-semibold">{doctor?.momoNumber ?? '—'}</span>
-              </div>
-              <div className="flex justify-between border-t border-brand-100 py-2">
-                <span className="text-slate-600">{t('finance.clinic')}</span>
-                <span className="font-semibold">{doctor?.clinicName ?? '—'}</span>
-              </div>
-            </div>
-          </div>
+          <TariffEditor doctor={doctor} onSaved={refresh} />
         )}
 
         {tab === 'reports' && (
@@ -329,6 +383,99 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="card p-4 text-center">
       <div className="text-lg font-bold text-brand-600">{value}</div>
       <div className="text-xs text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+/** Finance-editable clinic tariff (fee + MoMo number + clinic name). */
+function TariffEditor({ doctor, onSaved }: { doctor: Profile | null; onSaved: () => void }) {
+  const { t } = useLocale();
+  const [fee, setFee] = useState('');
+  const [momo, setMomo] = useState('');
+  const [clinic, setClinic] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    setFee(doctor?.consultationFee?.toString() ?? '');
+    setMomo(doctor?.momoNumber ?? '');
+    setClinic(doctor?.clinicName ?? '');
+  }, [doctor]);
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await consultationService.updateClinicTariff({
+        consultationFee: fee ? Number(fee) : undefined,
+        momoNumber: momo,
+        clinicName: clinic,
+      });
+      setMsg({ ok: true, text: t('common.saved') });
+      onSaved();
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof ApiError ? err.message : t('common.error') });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card mt-6 p-5">
+      <h3 className="font-semibold text-slate-700">{t('tariff.title')}</h3>
+      <p className="mt-1 text-sm text-slate-500">{t('finance.tariffEditDesc')}</p>
+
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="label">{t('tariff.consultation')}</label>
+          <div className="flex items-center gap-2">
+            <input
+              className="input"
+              type="number"
+              min={0}
+              step={500}
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+            />
+            <span className="text-sm font-medium text-slate-500">RWF</span>
+          </div>
+        </div>
+        <div>
+          <label className="label">{t('payment.momo')}</label>
+          <input
+            className="input font-mono"
+            value={momo}
+            onChange={(e) => setMomo(e.target.value)}
+            placeholder="*182*8*1*..."
+          />
+        </div>
+        <div>
+          <label className="label">{t('finance.clinic')}</label>
+          <input className="input" value={clinic} onChange={(e) => setClinic(e.target.value)} />
+        </div>
+      </div>
+
+      {/* Live reference preview */}
+      <div className="mt-5 rounded-xl bg-brand-50 p-4 text-sm">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-600">
+          {t('tariff.reference')}
+        </p>
+        <div className="flex justify-between border-b border-brand-100 py-1">
+          <span className="text-slate-600">{t('tariff.consultation')}</span>
+          <span className="font-semibold">{(Number(fee) || 0).toLocaleString()} RWF</span>
+        </div>
+        <div className="flex justify-between py-1">
+          <span className="text-slate-600">{t('payment.momo')}</span>
+          <span className="font-mono font-semibold">{momo || '—'}</span>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button className="btn-primary" onClick={save} disabled={busy}>
+          {busy ? t('common.loading') : t('common.save')}
+        </button>
+        {msg && <span className={`text-sm ${msg.ok ? 'text-brand-600' : 'text-red-600'}`}>{msg.text}</span>}
+      </div>
     </div>
   );
 }

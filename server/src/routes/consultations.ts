@@ -16,6 +16,7 @@ import {
   processPayment,
   submitPayment,
   submitTriage,
+  updateClinicTariff,
   updateDoctorProfile,
   updatePatientProfile,
   verifyPayment,
@@ -199,4 +200,14 @@ consultationRouter.patch('/doctor/profile', requireAuth, requireDoctor, (req, re
   updateDoctorProfile(req.profile!.id, req.body);
   const row = db.prepare('SELECT * FROM profiles WHERE id = ?').get(req.profile!.id);
   res.json({ doctor: mapProfile(row as Record<string, unknown>) });
+});
+
+// Finance owns billing: allow finance staff to edit the clinic tariff.
+consultationRouter.patch('/clinic/tariff', requireAuth, requireRole('finance'), (req, res) => {
+  try {
+    const row = updateClinicTariff(req.body);
+    res.json({ doctor: mapProfile(row) });
+  } catch (err) {
+    handle(res, err);
+  }
 });

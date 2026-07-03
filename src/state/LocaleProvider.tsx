@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import en from '../i18n/en.json';
 import rw from '../i18n/rw.json';
+import fr from '../i18n/fr.json';
 import type { Language } from '../data/types';
 
 type Dict = Record<string, string>;
-const dictionaries: Record<Language, Dict> = { en, rw };
+const dictionaries: Record<Language, Dict> = { en, rw, fr };
+const LANGUAGE_ORDER: Language[] = ['en', 'rw', 'fr'];
 const LOCALE_KEY = 'gara.locale';
 
 interface LocaleContextValue {
@@ -27,7 +29,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggle = useCallback(() => {
-    setLanguage(language === 'en' ? 'rw' : 'en');
+    const idx = LANGUAGE_ORDER.indexOf(language);
+    setLanguage(LANGUAGE_ORDER[(idx + 1) % LANGUAGE_ORDER.length]);
   }, [language, setLanguage]);
 
   const t = useCallback(

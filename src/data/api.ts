@@ -7,17 +7,26 @@
 const BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const SESSION_KEY = 'gara.session';
 
-// Session token is held in memory and mirrored to sessionStorage (NOT plain
-// localStorage), per the security spec. sessionStorage is cleared when the tab
-// closes, which is the desired behaviour for a session token.
-let sessionToken: string | null = sessionStorage.getItem(SESSION_KEY);
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
 
+/** Subscribe to global 401 responses (stale/invalid session). */
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => sessionExpiredListeners.delete(listener);
+}
+
+function notifySessionExpired(): void {
+  setSessionToken(null);
+  sessionExpiredListeners.forEach((fn) => fn());
+}
+
+/** Read the session token from sessionStorage (single source of truth). */
 export function getSessionToken(): string | null {
-  return sessionToken;
+  return sessionStorage.getItem(SESSION_KEY);
 }
 
 export function setSessionToken(token: string | null): void {
-  sessionToken = token;
   if (token) sessionStorage.setItem(SESSION_KEY, token);
   else sessionStorage.removeItem(SESSION_KEY);
 }
@@ -37,8 +46,9 @@ interface RequestOptions {
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (opts.auth !== false && sessionToken) {
-    headers.Authorization = `Bearer ${sessionToken}`;
+  const token = getSessionToken();
+  if (opts.auth !== false && token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   let res: Response;
@@ -55,6 +65,9 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const data = isJson ? await res.json() : null;
   if (!res.ok) {
+    if (res.status === 401 && opts.auth !== false) {
+      notifySessionExpired();
+    }
     throw new ApiError(res.status, data?.error ?? `Request failed (${res.status}).`);
   }
   return data as T;

@@ -19,12 +19,18 @@ import {
   scheduleService,
 } from '../../services/platformService';
 import { uploadFile } from '../../services/messageService';
+import { ApiError } from '../../data/api';
+import { tabClass, APPT_STATUS_STYLE, URGENCY_STYLE, ROLE_ACCENT_BORDER } from '../theme';
 import { generateClinicalPdf } from '../../services/pdfService';
 import { useAuth } from '../../state/AuthProvider';
 import { useLocale } from '../../state/LocaleProvider';
 import { AppShell } from '../components/AppShell';
 import { ProfilePanel } from '../components/ProfilePanel';
 import { ChatPanel } from '../components/ChatPanel';
+import { VitalsPanel } from '../components/VitalsPanel';
+import { PrescriptionBuilder } from '../components/Prescriptions';
+import { LabOrdersPanel } from '../components/LabOrdersPanel';
+import { PatientSummary } from '../components/PatientSummary';
 import { joinUser, useSocketEvent } from '../../hooks/useSocket';
 
 type Tab =
@@ -41,17 +47,11 @@ type Tab =
 
 const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const URGENCY_STYLES: Record<Urgency, string> = {
-  high: 'bg-red-100 text-red-700',
-  medium: 'bg-amber-100 text-amber-700',
-  low: 'bg-slate-100 text-slate-500',
-};
-
 function UrgencyBadge({ urgency }: { urgency: Urgency }) {
   const { t } = useLocale();
   if (urgency === 'low') return null;
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${URGENCY_STYLES[urgency]}`}>
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${URGENCY_STYLE[urgency]}`}>
       {urgency === 'high' ? '🚨 ' : ''}
       {t(`urgency.${urgency}`)}
     </span>
@@ -178,7 +178,7 @@ export function DoctorDashboard() {
     <AppShell onLogout={() => logout()}>
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+          <div className={`border-l-4 pl-3 ${ROLE_ACCENT_BORDER.doctor}`}>
             <h1 className="text-2xl font-bold text-slate-800">{t('dashboard.doctor')}</h1>
             <p className="text-sm text-slate-500">{profile?.fullName} · {profile?.clinicName}</p>
           </div>
@@ -204,7 +204,7 @@ export function DoctorDashboard() {
           ).map((tb) => (
             <button
               key={tb}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold sm:text-sm ${tab === tb ? 'bg-brand-500 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+              className={tabClass('doctor', tab === tb, 'sm')}
               onClick={() => {
                 setTab(tb);
                 setSelected(null);
@@ -239,24 +239,10 @@ export function DoctorDashboard() {
                 </div>
               ))}
             {tab === 'bookings' &&
-              bookings.map((b) => (
-                <div key={b.id} className="card flex items-center justify-between p-4 text-sm">
-                  <div>
-                    <p className="font-semibold">{b.patientName}</p>
-                    <p className="text-slate-500">{b.requestedDate}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    {(['confirmed', 'declined'] as const).map((s) => (
-                      <button
-                        key={s}
-                        className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium"
-                        onClick={() => appointmentService.updateStatus(b.id, s).then(refresh)}
-                      >
-                        {t(`appointment.${s}`)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              (bookings.length === 0 ? (
+                <p className="card p-6 text-center text-slate-500">{t('bookings.empty')}</p>
+              ) : (
+                bookings.map((b) => <BookingCard key={b.id} booking={b} onChanged={refresh} />)
               ))}
             {tab === 'schedule' && (
               <div className="card p-4">
@@ -410,6 +396,42 @@ export function DoctorDashboard() {
                     <button className="btn-ghost" onClick={() => createDoc('transfer')}>{t('doctor.transfer')}</button>
                     <button className="btn-primary" onClick={markComplete}>{t('doctor.complete')}</button>
                   </div>
+
+                  {selected.patientId && (
+                    <div className="space-y-3">
+                      <details className="rounded-xl border border-slate-200 p-3">
+                        <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                          🩺 {t('vitals.title')}
+                        </summary>
+                        <div className="mt-3">
+                          <VitalsPanel patientId={selected.patientId} consultationId={selected.id} canRecord />
+                        </div>
+                      </details>
+
+                      <details className="rounded-xl border border-slate-200 p-3">
+                        <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                          💊 {t('rx.builderTitle')}
+                        </summary>
+                        <div className="mt-3">
+                          <PrescriptionBuilder patientId={selected.patientId} consultationId={selected.id} />
+                        </div>
+                      </details>
+
+                      <details className="rounded-xl border border-slate-200 p-3">
+                        <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                          🧪 {t('labs.title')}
+                        </summary>
+                        <div className="mt-3">
+                          <LabOrdersPanel
+                            patientId={selected.patientId}
+                            consultationId={selected.id}
+                            canOrder
+                            canComplete
+                          />
+                        </div>
+                      </details>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -426,6 +448,10 @@ export function DoctorDashboard() {
 
         {history && <HistoryModal history={history} onClose={() => setHistory(null)} />}
       </main>
+
+      {selected && ['awaiting', 'active', 'complete'].includes(tab) && (
+        <PatientSummary consultation={selected} />
+      )}
     </AppShell>
   );
 }
@@ -659,6 +685,72 @@ function TariffSettings() {
       <button className="btn-primary mt-4" disabled={busy} onClick={save}>
         {busy ? t('common.loading') : t('common.save')}
       </button>
+    </div>
+  );
+}
+
+function BookingCard({ booking, onChanged }: { booking: Appointment; onChanged: () => void }) {
+  const { t } = useLocale();
+  const [busy, setBusy] = useState<'confirmed' | 'declined' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const dateLabel = booking.requestedDate
+    ? new Date(booking.requestedDate).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : '—';
+
+  async function act(status: 'confirmed' | 'declined') {
+    setBusy(status);
+    setError(null);
+    try {
+      await appointmentService.updateStatus(booking.id, status);
+      await onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('common.error'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const decided = booking.status === 'confirmed' || booking.status === 'declined' || booking.status === 'completed';
+
+  return (
+    <div className="card p-4 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="truncate font-semibold">{booking.patientName ?? '—'}</p>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${APPT_STATUS_STYLE[booking.status] ?? APPT_STATUS_STYLE.pending}`}
+            >
+              {t(`appointment.status.${booking.status}`)}
+            </span>
+          </div>
+          <p className="mt-0.5 text-slate-500">{dateLabel}</p>
+          {booking.notes && <p className="mt-1 text-xs text-slate-500">{booking.notes}</p>}
+        </div>
+        {!decided && (
+          <div className="flex shrink-0 gap-2">
+            <button
+              className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              onClick={() => act('confirmed')}
+              disabled={busy !== null}
+            >
+              {busy === 'confirmed' ? t('common.loading') : t('appointment.confirmed')}
+            </button>
+            <button
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+              onClick={() => act('declined')}
+              disabled={busy !== null}
+            >
+              {busy === 'declined' ? t('common.loading') : t('appointment.declined')}
+            </button>
+          </div>
+        )}
+      </div>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

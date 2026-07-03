@@ -6,6 +6,7 @@ import {
   patientAssistant,
   triageChatbot,
   type ChatTurn,
+  type Lang,
   type TriageChatDraft,
 } from './aiService.js';
 import { roleOf, type ProfileRow } from './authService.js';
@@ -29,7 +30,7 @@ function assertDoctorAccess(row: Record<string, unknown>, doctorId: string) {
 export function runTriageChat(
   messages: ChatTurn[],
   draft: TriageChatDraft,
-  language: 'en' | 'rw'
+  language: Lang
 ) {
   return triageChatbot(messages, draft, language);
 }
@@ -39,7 +40,7 @@ export async function runPatientAssistant(
   consultationId: string,
   messages: ChatTurn[],
   question: string,
-  language: 'en' | 'rw'
+  language: Lang
 ) {
   const row = getConsultationRow(consultationId);
   assertPatientAccess(row, patientId);
@@ -69,7 +70,7 @@ export async function runPatientAssistant(
 export async function runDoctorSuggestions(
   doctorId: string,
   consultationId: string,
-  language: 'en' | 'rw'
+  language: Lang
 ) {
   const row = getConsultationRow(consultationId);
   assertDoctorAccess(row, doctorId);
@@ -116,7 +117,7 @@ export async function runGeneralAssistant(
   page: string,
   messages: ChatTurn[],
   question: string,
-  language: 'en' | 'rw'
+  language: Lang
 ) {
   const role = roleOf(profile);
   return generalAssistant(role, profile.full_name, page, messages, question, language);

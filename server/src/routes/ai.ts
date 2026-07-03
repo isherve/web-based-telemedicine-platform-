@@ -7,6 +7,7 @@ import {
   runPatientAssistant,
   runTriageChat,
 } from '../services/aiChatService.js';
+import { normLang } from '../services/aiService.js';
 
 export const aiRouter = Router();
 
@@ -21,7 +22,7 @@ aiRouter.post('/triage-chat', requireAuth, async (req, res) => {
   if (req.profile!.is_doctor) return res.status(403).json({ error: 'Patients only.' });
   try {
     const { messages = [], draft = {}, language = 'en' } = req.body ?? {};
-    const result = await runTriageChat(messages, draft, language === 'rw' ? 'rw' : 'en');
+    const result = await runTriageChat(messages, draft, normLang(language));
     res.json(result);
   } catch (err) {
     handle(res, err);
@@ -41,7 +42,7 @@ aiRouter.post('/patient-assistant', requireAuth, async (req, res) => {
       consultationId,
       messages,
       question.trim(),
-      language === 'rw' ? 'rw' : 'en'
+      normLang(language)
     );
     res.json(result);
   } catch (err) {
@@ -59,7 +60,7 @@ aiRouter.post('/general', requireAuth, async (req, res) => {
       page,
       messages,
       question.trim(),
-      language === 'rw' ? 'rw' : 'en'
+      normLang(language)
     );
     res.json(result);
   } catch (err) {
@@ -74,7 +75,7 @@ aiRouter.post('/doctor-suggestions', requireAuth, requireDoctor, async (req, res
     const result = await runDoctorSuggestions(
       req.profile!.id,
       consultationId,
-      language === 'rw' ? 'rw' : 'en'
+      normLang(language)
     );
     res.json(result);
   } catch (err) {
