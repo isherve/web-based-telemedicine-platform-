@@ -18,7 +18,7 @@ export function verifyPassword(password: string, salt: string, hash: string): bo
   return hashPassword(password, salt) === hash;
 }
 
-export type Role = 'patient' | 'doctor' | 'finance' | 'pharmacy';
+export type Role = 'patient' | 'doctor' | 'finance' | 'pharmacy' | 'admin';
 
 export interface ProfileRow {
   id: string;
@@ -40,6 +40,9 @@ export interface ProfileRow {
   chronic_conditions: string | null;
   ai_consent: number | null;
   consented_at: string | null;
+  insurance_provider: string | null;
+  insurance_number: string | null;
+  insurance_scheme: string | null;
   created_at: string;
 }
 
@@ -58,6 +61,9 @@ export interface PublicProfile {
   allergies: string | null;
   chronicConditions: string | null;
   aiConsent: boolean;
+  insuranceProvider: string | null;
+  insuranceNumber: string | null;
+  insuranceScheme: string | null;
   createdAt: string;
 }
 
@@ -82,6 +88,9 @@ export function toPublicProfile(row: ProfileRow): PublicProfile {
     allergies: row.allergies,
     chronicConditions: row.chronic_conditions,
     aiConsent: row.ai_consent === 1,
+    insuranceProvider: row.insurance_provider,
+    insuranceNumber: row.insurance_number,
+    insuranceScheme: row.insurance_scheme,
     createdAt: row.created_at,
   };
 }
@@ -248,6 +257,9 @@ export interface UpdateProfileInput {
   allergies?: string;
   chronicConditions?: string;
   aiConsent?: boolean;
+  insuranceProvider?: string;
+  insuranceNumber?: string;
+  insuranceScheme?: string;
 }
 
 /**
@@ -308,6 +320,12 @@ export function updateMyProfile(row: ProfileRow, input: UpdateProfileInput): Pub
       push('ai_consent', input.aiConsent ? 1 : 0);
       push('consented_at', input.aiConsent ? new Date().toISOString() : null);
     }
+    if (input.insuranceProvider !== undefined)
+      push('insurance_provider', input.insuranceProvider.trim() || null);
+    if (input.insuranceNumber !== undefined)
+      push('insurance_number', input.insuranceNumber.trim() || null);
+    if (input.insuranceScheme !== undefined)
+      push('insurance_scheme', input.insuranceScheme.trim() || null);
   }
 
   if (sets.length) {

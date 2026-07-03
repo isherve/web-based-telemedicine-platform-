@@ -11,6 +11,7 @@ const QUICK_BY_ROLE: Record<string, string[]> = {
   doctor: ['ai.globalD1', 'ai.globalD2', 'ai.globalD3'],
   finance: ['ai.globalF1', 'ai.globalF2', 'ai.globalF3'],
   pharmacy: ['ai.globalP1', 'ai.globalP2', 'ai.globalP3'],
+  admin: ['ai.globalA1', 'ai.globalA2', 'ai.globalA3'],
 };
 
 export function GlobalAssistant() {
@@ -51,10 +52,13 @@ export function GlobalAssistant() {
       const text = result.disclaimer ? `${result.reply}\n\n— ${result.disclaimer}` : result.reply;
       setMessages((m) => [...m, { role: 'assistant', content: text }]);
     } catch (err) {
-      setMessages((m) => [
-        ...m,
-        { role: 'assistant', content: err instanceof ApiError ? err.message : t('common.error') },
-      ]);
+      const text =
+        err instanceof ApiError && err.status === 401
+          ? t('common.sessionExpired')
+          : err instanceof ApiError
+            ? err.message
+            : t('common.error');
+      setMessages((m) => [...m, { role: 'assistant', content: text }]);
     } finally {
       setBusy(false);
     }

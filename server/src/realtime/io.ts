@@ -27,6 +27,20 @@ export function initRealtime(server: HttpServer, origin: CorsOrigin): SocketServ
     socket.on('join:user', (userId: string) => {
       if (userId) socket.join(`user:${userId}`);
     });
+
+    // ---- WebRTC signaling relay for live video consultations ----
+    // Peers join the consultation room and relay SDP/ICE to the other side.
+    // The server is a dumb relay; no media flows through it.
+    const relay = (event: string) => (payload: { consultationId: string; [k: string]: unknown }) => {
+      if (payload?.consultationId) {
+        socket.to(`consultation:${payload.consultationId}`).emit(event, payload);
+      }
+    };
+    socket.on('call:invite', relay('call:invite'));
+    socket.on('call:offer', relay('call:offer'));
+    socket.on('call:answer', relay('call:answer'));
+    socket.on('call:ice', relay('call:ice'));
+    socket.on('call:end', relay('call:end'));
   });
 
   return io;

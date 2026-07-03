@@ -3,10 +3,11 @@ import type { Consultation, Message } from '../../data/types';
 import { messageService, uploadFile } from '../../services/messageService';
 import { consultationService } from '../../services/consultationService';
 import { aiService, type ChatTurn } from '../../services/aiService';
-import { joinConsultation, useSocketEvent } from '../../hooks/useSocket';
+import { joinConsultation, useSocketEvent, getSocket } from '../../hooks/useSocket';
 import { useAuth } from '../../state/AuthProvider';
 import { useLocale } from '../../state/LocaleProvider';
 import { ApiError } from '../../data/api';
+import { VideoCall } from './VideoCall';
 
 function initials(name: string): string {
   return name
@@ -49,6 +50,9 @@ export function ChatPanel({ consultation }: { consultation: Consultation }) {
   const [aiMessages, setAiMessages] = useState<ChatTurn[]>([]);
   const [aiInput, setAiInput] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [inCall, setInCall] = useState(false);
+  const [callInitiator, setCallInitiator] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(false);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const aiScrollRef = useRef<HTMLDivElement>(null);
@@ -85,6 +89,21 @@ export function ChatPanel({ consultation }: { consultation: Consultation }) {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
     }
   });
+
+  useSocketEvent<{ consultationId: string }>('call:invite', (payload) => {
+    if (payload.consultationId === consultation.id && !inCall) setIncomingCall(true);
+  });
+
+  function startCall() {
+    getSocket().emit('call:invite', { consultationId: consultation.id });
+    setCallInitiator(true);
+    setInCall(true);
+  }
+  function acceptCall() {
+    setIncomingCall(false);
+    setCallInitiator(false);
+    setInCall(true);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -267,6 +286,16 @@ export function ChatPanel({ consultation }: { consultation: Consultation }) {
             {view === 'assistant' ? t('ai.assistantOnline') : t('chat.active')}
           </p>
         </div>
+        {view === 'doctor' && (
+          <button
+            type="button"
+            onClick={startCall}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"
+            title={t('video.start')}
+          >
+            📹
+          </button>
+        )}
         {!isDoctor && (
           <div className="flex gap-1 rounded-full bg-slate-100 p-0.5">
             <button
@@ -286,6 +315,31 @@ export function ChatPanel({ consultation }: { consultation: Consultation }) {
           </div>
         )}
       </div>
+
+      {incomingCall && !inCall && (
+        <div className="flex items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-4 py-2 text-sm">
+          <span className="font-medium text-emerald-800">📹 {t('video.incoming')}</span>
+          <div className="flex gap-2">
+            <button className="btn-primary px-3 py-1 text-xs" onClick={acceptCall}>
+              {t('video.join')}
+            </button>
+            <button
+              className="btn-ghost px-3 py-1 text-xs"
+              onClick={() => setIncomingCall(false)}
+            >
+              {t('video.decline')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {inCall && (
+        <VideoCall
+          consultationId={consultation.id}
+          initiator={callInitiator}
+          onClose={() => setInCall(false)}
+        />
+      )}
 
       {/* Doctor chat view */}
       {view === 'doctor' && (

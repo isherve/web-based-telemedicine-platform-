@@ -21,9 +21,15 @@ import { uploadRouter } from './routes/uploads.js';
 import { pharmacyRouter } from './routes/pharmacy.js';
 import { reportRouter } from './routes/reports.js';
 import { aiRouter } from './routes/ai.js';
+import { clinicalRouter } from './routes/clinical.js';
+import { reminderRouter } from './routes/reminders.js';
+import { adminRouter } from './routes/admin.js';
+import { assignmentRouter } from './routes/assignments.js';
 import { initRealtime } from './realtime/io.js';
 import { createNotification } from './services/notificationService.js';
 import { sendSms } from './services/smsService.js';
+import { fireDueReminders } from './services/reminderService.js';
+import { generateSalt, hashPassword } from './services/authService.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -48,6 +54,16 @@ db.prepare(
    momo_number = COALESCE(momo_number, '*182*8*1*0780000000#')
    WHERE is_doctor = 1 AND (consultation_fee IS NULL OR momo_number IS NULL)`
 ).run();
+
+// Seed a default admin account on first run (offline superuser).
+const adminExists = db.prepare("SELECT id FROM profiles WHERE role = 'admin' LIMIT 1").get();
+if (!adminExists) {
+  const salt = generateSalt();
+  db.prepare(
+    `INSERT INTO profiles (id, email, full_name, is_doctor, role, password_hash, password_salt)
+     VALUES (?, 'admin@gara.rw', 'System Administrator', 0, 'admin', ?, ?)`
+  ).run(randomUUID(), hashPassword('admin123', salt), salt);
+}
 
 // Seed a starter pharmacy inventory on first run.
 const medCount = (db.prepare('SELECT COUNT(*) AS c FROM medicines').get() as { c: number }).c;
@@ -120,6 +136,10 @@ app.use('/api/uploads', uploadRouter);
 app.use('/api/pharmacy', pharmacyRouter);
 app.use('/api/reports', reportRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/clinical', clinicalRouter);
+app.use('/api/reminders', reminderRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/assignments', assignmentRouter);
 
 const server = createServer(app);
 initRealtime(
@@ -166,8 +186,14 @@ function runReminderSweep() {
       }
     }
   }
+  // Fire any due medication/appointment reminders scheduled by users.
+  try {
+    fireDueReminders();
+  } catch (err) {
+    console.error('reminder sweep', err);
+  }
 }
-setInterval(runReminderSweep, 5 * 60 * 1000);
+setInterval(runReminderSweep, 60 * 1000);
 
 server.listen(PORT, () => {
   const aiMode = process.env.GROQ_API_KEY?.trim()

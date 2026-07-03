@@ -6,6 +6,7 @@ import { PatientDashboard } from './presentation/pages/PatientDashboard';
 import { DoctorDashboard } from './presentation/pages/DoctorDashboard';
 import { FinanceDashboard } from './presentation/pages/FinanceDashboard';
 import { PharmacyDashboard } from './presentation/pages/PharmacyDashboard';
+import { AdminDashboard } from './presentation/pages/AdminDashboard';
 import { TriagePage } from './presentation/pages/TriagePage';
 import { BookingPage } from './presentation/pages/BookingPage';
 import type { Role } from './data/types';
@@ -15,6 +16,7 @@ const HOME_BY_ROLE: Record<Role, string> = {
   doctor: '/doctor',
   finance: '/finance',
   pharmacy: '/pharmacy',
+  admin: '/admin',
 };
 
 export default function App() {
@@ -46,6 +48,7 @@ export default function App() {
       <Route path="/doctor" element={guard('doctor', <DoctorDashboard />)} />
       <Route path="/finance" element={guard('finance', <FinanceDashboard />)} />
       <Route path="/pharmacy" element={guard('pharmacy', <PharmacyDashboard />)} />
+      <Route path="/admin" element={guard('admin', <AdminDashboard />)} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

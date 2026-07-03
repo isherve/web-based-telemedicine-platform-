@@ -36,6 +36,9 @@ export interface ProfileUpdate {
   allergies?: string;
   chronicConditions?: string;
   aiConsent?: boolean;
+  insuranceProvider?: string;
+  insuranceNumber?: string;
+  insuranceScheme?: string;
 }
 
 async function persistSession(result: AuthResult): Promise<Profile> {

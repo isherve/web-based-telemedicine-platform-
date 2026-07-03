@@ -4,13 +4,9 @@ import { useLocale } from '../../state/LocaleProvider';
 import { consultationService } from '../../services/consultationService';
 import { downloadBlob, generateMyDataPdf } from '../../services/pdfService';
 import { ApiError } from '../../data/api';
+import { ROLE_BADGE } from '../theme';
 
-const ROLE_STYLES: Record<string, string> = {
-  patient: 'bg-emerald-100 text-emerald-700',
-  doctor: 'bg-brand-100 text-brand-700',
-  finance: 'bg-amber-100 text-amber-700',
-  pharmacy: 'bg-violet-100 text-violet-700',
-};
+const ROLE_STYLES = ROLE_BADGE;
 
 function initials(name: string | null | undefined): string {
   if (!name) return '?';
@@ -54,10 +50,72 @@ export function ProfilePanel() {
       <PersonalInfoCard />
       {role === 'doctor' && <PracticeCard />}
       {role === 'patient' && <ClinicalCard />}
+      {role === 'patient' && <InsuranceCard />}
       {role === 'patient' && <ExportCard />}
       <SecurityCard />
     </div>
   );
+
+  function InsuranceCard() {
+    const [providerName, setProviderName] = useState(profile!.insuranceProvider ?? '');
+    const [number, setNumber] = useState(profile!.insuranceNumber ?? '');
+    const [scheme, setScheme] = useState(profile!.insuranceScheme ?? '');
+    const [busy, setBusy] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    async function save() {
+      setBusy(true);
+      setSaved(false);
+      try {
+        await updateProfile({
+          insuranceProvider: providerName,
+          insuranceNumber: number,
+          insuranceScheme: scheme,
+        });
+        setSaved(true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    return (
+      <div className="card p-6">
+        <h3 className="font-semibold text-slate-700">{t('profile.insuranceTitle')}</h3>
+        <p className="mb-3 mt-1 text-xs text-slate-500">{t('profile.insuranceDesc')}</p>
+        <label className="label">{t('profile.insuranceProvider')}</label>
+        <select className="input" value={providerName} onChange={(e) => setProviderName(e.target.value)}>
+          <option value="">{t('profile.insuranceNone')}</option>
+          <option value="RSSB (Mutuelle)">RSSB (Mutuelle de Santé)</option>
+          <option value="RSSB (RAMA)">RSSB (RAMA)</option>
+          <option value="MMI">MMI</option>
+          <option value="Radiant">Radiant Insurance</option>
+          <option value="Prime">Prime Insurance</option>
+          <option value="Other">{t('profile.insuranceOther')}</option>
+        </select>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">{t('profile.insuranceNumber')}</label>
+            <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">{t('profile.insuranceScheme')}</label>
+            <input
+              className="input"
+              value={scheme}
+              onChange={(e) => setScheme(e.target.value)}
+              placeholder={t('profile.insuranceSchemePlaceholder')}
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button className="btn-primary" onClick={save} disabled={busy}>
+            {busy ? t('common.loading') : t('common.save')}
+          </button>
+          {saved && <span className="text-sm text-brand-600">{t('common.saved')}</span>}
+        </div>
+      </div>
+    );
+  }
 
   function PersonalInfoCard() {
     const isPatient = role === 'patient';

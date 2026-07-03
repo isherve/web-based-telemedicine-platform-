@@ -14,6 +14,7 @@ import {
   type ProfileUpdate,
   type StaffRegistration,
 } from '../services/authService';
+import { onSessionExpired } from '../data/api';
 import type { Profile, Role } from '../data/types';
 
 interface AuthContextValue {
@@ -43,6 +44,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .restore()
       .then(setProfile)
       .finally(() => setLoading(false));
+  }, []);
+
+  // Any API 401 clears the stale session so the UI returns to login.
+  useEffect(() => {
+    return onSessionExpired(() => setProfile(null));
   }, []);
 
   const registerPatient = useCallback(async (input: PatientRegistration) => {

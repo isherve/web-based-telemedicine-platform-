@@ -22,14 +22,25 @@ import { AppShell } from '../components/AppShell';
 import { ChatPanel } from '../components/ChatPanel';
 import { ProfilePanel } from '../components/ProfilePanel';
 import { StatusTracker } from '../components/StatusTracker';
+import { VitalsPanel } from '../components/VitalsPanel';
+import { RemindersPanel } from '../components/RemindersPanel';
+import { LabOrdersPanel } from '../components/LabOrdersPanel';
+import { PrescriptionCard } from '../components/Prescriptions';
+import { clinicalService } from '../../services/clinicalService';
+import type { EPrescription } from '../../data/types';
 import { joinUser, useSocketEvent } from '../../hooks/useSocket';
 import { ApiError } from '../../data/api';
+import { tabClass, ROLE_ACCENT_BORDER } from '../theme';
 
 type Tab =
   | 'dashboard'
   | 'appointments'
+  | 'vitals'
+  | 'prescriptions'
+  | 'labs'
   | 'documents'
   | 'medicines'
+  | 'reminders'
   | 'followups'
   | 'notifications'
   | 'history'
@@ -38,8 +49,12 @@ type Tab =
 const PATIENT_TABS: Tab[] = [
   'dashboard',
   'appointments',
+  'vitals',
+  'prescriptions',
+  'labs',
   'documents',
   'medicines',
+  'reminders',
   'followups',
   'notifications',
   'history',
@@ -58,6 +73,7 @@ export function PatientDashboard() {
   const [myData, setMyData] = useState<MyData | null>(null);
   const [replyText, setReplyText] = useState('');
   const [queue, setQueue] = useState<QueuePosition | null>(null);
+  const [prescriptions, setPrescriptions] = useState<EPrescription[]>([]);
 
   const refresh = useCallback(async () => {
     const [c, a, d, f, n, md] = await Promise.all([
@@ -74,6 +90,7 @@ export function PatientDashboard() {
     setFollowUps(f);
     setNotifications(n);
     setMyData(md);
+    clinicalService.myPrescriptions().then(setPrescriptions).catch(() => setPrescriptions([]));
     const active = c[0];
     if (active && active.status !== 'complete') {
       consultationService.getQueuePosition(active.id).then(setQueue).catch(() => setQueue(null));
@@ -99,8 +116,10 @@ export function PatientDashboard() {
   return (
     <AppShell onLogout={() => logout()}>
       <main className="mx-auto max-w-3xl px-4 py-6">
-        <h1 className="text-2xl font-bold text-slate-800">{t('dashboard.patient')}</h1>
-        <p className="text-sm text-slate-500">{profile?.fullName}</p>
+        <div className={`border-l-4 pl-3 ${ROLE_ACCENT_BORDER.patient}`}>
+          <h1 className="text-2xl font-bold text-slate-800">{t('dashboard.patient')}</h1>
+          <p className="text-sm text-slate-500">{profile?.fullName}</p>
+        </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
           {PATIENT_TABS.map((tb) => {
@@ -108,7 +127,7 @@ export function PatientDashboard() {
             return (
               <button
                 key={tb}
-                className={`relative whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab === tb ? 'bg-brand-500 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+                className={`relative ${tabClass('patient', tab === tb)}`}
                 onClick={() => setTab(tb)}
               >
                 {t(`patient.tab.${tb}`)}
@@ -255,6 +274,34 @@ export function PatientDashboard() {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {tab === 'vitals' && profile && (
+          <div className="mt-6">
+            <VitalsPanel patientId={profile.id} canRecord />
+          </div>
+        )}
+
+        {tab === 'prescriptions' && (
+          <div className="mt-6 space-y-3">
+            {prescriptions.length === 0 ? (
+              <p className="card p-6 text-center text-slate-500">{t('rx.empty')}</p>
+            ) : (
+              prescriptions.map((rx) => <PrescriptionCard key={rx.id} rx={rx} />)
+            )}
+          </div>
+        )}
+
+        {tab === 'labs' && (
+          <div className="mt-6">
+            <LabOrdersPanel mine />
+          </div>
+        )}
+
+        {tab === 'reminders' && (
+          <div className="mt-6">
+            <RemindersPanel />
           </div>
         )}
 

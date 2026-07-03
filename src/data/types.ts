@@ -2,8 +2,8 @@
 // camelCase for the client. The backend maps snake_case rows to these shapes.
 
 export type CareStatus = 'pending_payment' | 'in_process' | 'complete';
-export type Language = 'en' | 'rw';
-export type Role = 'patient' | 'doctor' | 'finance' | 'pharmacy';
+export type Language = 'en' | 'rw' | 'fr';
+export type Role = 'patient' | 'doctor' | 'finance' | 'pharmacy' | 'admin';
 
 export type Urgency = 'low' | 'medium' | 'high';
 export type PaymentProvider = 'momo' | 'airtel';
@@ -22,6 +22,116 @@ export interface Profile {
   allergies: string | null;
   chronicConditions: string | null;
   aiConsent: boolean;
+  insuranceProvider: string | null;
+  insuranceNumber: string | null;
+  insuranceScheme: string | null;
+  createdAt: string;
+}
+
+export interface Vital {
+  id: string;
+  patientId: string;
+  consultationId: string | null;
+  recordedBy: string;
+  systolic: number | null;
+  diastolic: number | null;
+  heartRate: number | null;
+  temperature: number | null;
+  weight: number | null;
+  bloodSugar: number | null;
+  spo2: number | null;
+  note: string | null;
+  createdAt: string;
+  recordedByName?: string | null;
+}
+
+export interface RxItem {
+  id?: string;
+  medicineId?: string | null;
+  medicineName: string;
+  dosage?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  quantity?: number;
+  instructions?: string | null;
+  dispensed?: boolean;
+}
+
+export interface EPrescription {
+  id: string;
+  consultationId: string | null;
+  patientId: string;
+  doctorId: string;
+  status: 'active' | 'dispensed' | 'cancelled';
+  note: string | null;
+  createdAt: string;
+  patientName?: string | null;
+  doctorName?: string | null;
+  items: RxItem[];
+}
+
+export interface LabOrder {
+  id: string;
+  consultationId: string | null;
+  patientId: string;
+  doctorId: string;
+  testName: string;
+  status: 'ordered' | 'completed' | 'cancelled';
+  result: string | null;
+  resultAt: string | null;
+  note: string | null;
+  createdAt: string;
+  patientName?: string | null;
+}
+
+export interface Reminder {
+  id: string;
+  userId: string;
+  title: string;
+  body: string | null;
+  kind: string;
+  dueAt: string;
+  sent: boolean;
+  createdAt: string;
+}
+
+export interface AdminStats {
+  users: { total: number; patients: number; doctors: number; finance: number; pharmacy: number };
+  consultations: { total: number; pending: number; inProgress: number; completed: number; urgent: number };
+  revenue: number;
+  prescriptions: number;
+  labOrders: number;
+  medicines: number;
+  lowStock: number;
+}
+
+export interface AdminUser {
+  id: string;
+  fullName: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  role: Role;
+  isDoctor: boolean;
+  clinicName: string | null;
+  createdAt: string;
+}
+
+export interface DoctorLeaderboardEntry {
+  id: string;
+  name: string | null;
+  consultations: number;
+  completed: number;
+  revenue: number;
+  avgRating: number | null;
+}
+
+export interface AuditEntry {
+  id: string;
+  actorId: string | null;
+  actorName: string | null;
+  action: string | null;
+  entity: string | null;
+  entityId: string | null;
   createdAt: string;
 }
 
@@ -272,4 +382,42 @@ export interface MyData {
   consultations: Consultation[];
   documents: { id: string; documentKind: string; createdAt: string }[];
   dispenses: { medicineName: string | null; quantity: number; createdAt: string }[];
+}
+
+// --- Patient → doctor assignment (schedule-aware) ---
+export interface DoctorCandidate {
+  id: string;
+  fullName: string | null;
+  clinicName: string | null;
+  onDuty: boolean;
+  availableToday: boolean;
+  todayOpen: string | null;
+  todayClose: string | null;
+  activeLoad: number;
+  waitingLoad: number;
+  totalOpen: number;
+  avgRating: number | null;
+  score: number;
+  reasons: string[];
+}
+
+export interface AssignmentConsultation {
+  id: string;
+  patientId: string | null;
+  patientName: string | null;
+  patientPhone: string | null;
+  doctorId: string | null;
+  doctorName: string | null;
+  status: CareStatus;
+  symptomCategory: string | null;
+  urgency: Urgency;
+  urgencyScore: number;
+  createdAt: string;
+}
+
+export interface AssignmentSuggestion {
+  consultationId: string;
+  recommendedDoctorId: string | null;
+  summary: string;
+  candidates: DoctorCandidate[];
 }
