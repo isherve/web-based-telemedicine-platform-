@@ -107,16 +107,9 @@ Or: [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprin
 
 `render.yaml` is already in the repo root. Render creates **gara-api** from it.
 
-Set these secrets when prompted (`sync: false` in the blueprint):
+**You only need to enter one secret:** `GROQ_API_KEY` (your `gsk_...` key from [console.groq.com/keys](https://console.groq.com/keys)). Registration tokens and `CLIENT_ORIGIN` are preconfigured.
 
-| Variable | Example |
-|----------|---------|
-| `GROQ_API_KEY` | your `gsk_...` key |
-| `DOCTOR_REGISTRATION_TOKEN` | `@@` |
-| `FINANCE_REGISTRATION_TOKEN` | `gara-finance-2026` |
-| `PHARMACY_REGISTRATION_TOKEN` | `gara-pharmacy-2026` |
-
-`CLIENT_ORIGIN` is preset to the Vercel URL. After deploy, test:
+After deploy, test:
 
 `https://gara-api.onrender.com/api/health` → `{"ok":true,...}`
 

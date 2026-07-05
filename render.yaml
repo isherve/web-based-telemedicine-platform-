@@ -1,11 +1,12 @@
 # Render API backend (pairs with Vercel frontend at web-based-telemedicine-platform.vercel.app)
-# Render Blueprint reads this file from the repo root on push to main.
+# One-click: https://render.com/deploy?repo=https://github.com/isherve/web-based-telemedicine-platform-
 
 services:
   - type: web
     name: gara-api
     runtime: node
     repo: https://github.com/isherve/web-based-telemedicine-platform-
+    branch: main
     plan: free
     region: frankfurt
     buildCommand: npm install --prefix server --omit=dev
@@ -18,11 +19,12 @@ services:
         value: https://web-based-telemedicine-platform.vercel.app
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
+      # Only secret you must enter at deploy time:
       - key: GROQ_API_KEY
         sync: false
       - key: DOCTOR_REGISTRATION_TOKEN
-        sync: false
+        value: "@@"
       - key: FINANCE_REGISTRATION_TOKEN
-        sync: false
+        value: gara-finance-2026
       - key: PHARMACY_REGISTRATION_TOKEN
-        sync: false
+        value: gara-pharmacy-2026
