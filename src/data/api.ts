@@ -3,9 +3,16 @@
 // original. Presentation code must never call this directly; go through services.
 
 // Empty BASE_URL = same-origin `/api/...` (Vite dev proxy → localhost:4000).
-// Set VITE_API_URL only when the frontend is served separately in production.
+// On Vercel, set VITE_API_URL to your Render/Railway backend (e.g. https://gara-api.onrender.com).
 const BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const SESSION_KEY = 'gara.session';
+
+/** API origin for HTTP, uploads, and Socket.IO (same-origin when BASE_URL is empty). */
+export function getApiOrigin(): string {
+  if (BASE_URL) return BASE_URL;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+}
 
 type SessionExpiredListener = () => void;
 const sessionExpiredListeners = new Set<SessionExpiredListener>();
@@ -59,7 +66,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
   } catch {
-    throw new ApiError(0, 'Cannot reach the local server. Is it running?');
+    throw new ApiError(0, 'Cannot reach the server. Check that the API is running and VITE_API_URL is set.');
   }
 
   const isJson = res.headers.get('content-type')?.includes('application/json');

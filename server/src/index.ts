@@ -34,16 +34,27 @@ import { generateSalt, hashPassword } from './services/authService.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const PORT = Number(process.env.PORT ?? 4000);
-// Render sets RENDER_EXTERNAL_URL automatically; fall back to localhost for dev.
-const CLIENT_ORIGIN =
-  process.env.CLIENT_ORIGIN ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:5173';
+// Comma-separated allowed frontend origins (Vercel URL, custom domain, localhost).
+// Example: https://gara.vercel.app,https://my-app.vercel.app
+const CLIENT_ORIGINS = (process.env.CLIENT_ORIGIN ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const isDev = process.env.NODE_ENV !== 'production';
 
-/** Allow any localhost port in dev (Vite may pick 5173, 5174, 5175, …). */
+/** Allow localhost in dev, configured origins, and any *.vercel.app deployment. */
 function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
-  if (origin === CLIENT_ORIGIN) return true;
+  if (CLIENT_ORIGINS.includes(origin)) return true;
+  if (/^https:\/\/[\w.-]+\.vercel\.app$/.test(origin)) return true;
   return /^https?:\/\/localhost(:\d+)?$/.test(origin);
+}
+
+function corsOrigin(
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+): void {
+  callback(null, isAllowedOrigin(origin));
 }
 
 // Apply schema on boot (idempotent).
@@ -110,9 +121,7 @@ if (doctorRow) {
 const app = express();
 app.use(
   cors({
-    origin: isDev
-      ? (origin, callback) => callback(null, isAllowedOrigin(origin))
-      : CLIENT_ORIGIN,
+    origin: corsOrigin,
     credentials: true,
   })
 );
@@ -127,7 +136,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     mode: isDev ? 'development' : 'production',
-    origin: CLIENT_ORIGIN,
+    origin: CLIENT_ORIGINS[0] ?? 'http://localhost:5173',
     time: new Date().toISOString(),
   });
 });
@@ -168,12 +177,7 @@ if (!isDev) {
 }
 
 const server = createServer(app);
-initRealtime(
-  server,
-  isDev
-    ? (origin, callback) => callback(null, isAllowedOrigin(origin))
-    : CLIENT_ORIGIN
-);
+initRealtime(server, corsOrigin);
 
 // ---- Appointment reminder job (in-app + SMS hook) ----
 // Sends a reminder ~24h and ~1h before a confirmed appointment. In-memory dedupe
@@ -227,7 +231,7 @@ server.listen(PORT, () => {
     : 'offline heuristics';
   console.log(`\n  Gara backend running (${isDev ? 'development' : 'production'})`);
   console.log(`  AI:       ${aiMode}`);
-  console.log(`  Origin:   ${CLIENT_ORIGIN}`);
+  console.log(`  Origins:  ${CLIENT_ORIGINS.join(', ') || 'localhost'} + *.vercel.app`);
   console.log(`  API:      /api`);
   console.log(`  Uploads:  /uploads`);
   console.log(`  Realtime: /socket.io\n`);

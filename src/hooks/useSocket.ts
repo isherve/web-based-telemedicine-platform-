@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { getApiOrigin } from '../data/api';
 
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
+    const origin = getApiOrigin();
+    socket = io(origin || undefined, { path: '/socket.io', transports: ['websocket', 'polling'] });
   }
   return socket;
 }
