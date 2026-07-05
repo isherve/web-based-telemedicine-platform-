@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const dataDir = join(__dirname, '..', '..', 'data');
-mkdirSync(dataDir, { recursive: true });
-
 const dbPath = process.env.GARA_DB_PATH ?? join(dataDir, 'gara.db');
+mkdirSync(dirname(dbPath), { recursive: true });
 
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
