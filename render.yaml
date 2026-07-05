@@ -5,6 +5,7 @@ services:
   - type: web
     name: gara-api
     runtime: node
+    repo: https://github.com/isherve/web-based-telemedicine-platform-
     plan: free
     region: frankfurt
     buildCommand: npm install --prefix server --omit=dev
