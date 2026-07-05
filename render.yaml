@@ -1,0 +1,40 @@
+# Render Blueprint — deploy Gara as one live web service (API + React UI).
+# Connect this repo in Render: Dashboard → New → Blueprint → select repository.
+#
+# Starter plan ($7/mo) recommended: persistent disk keeps SQLite + uploads
+# across redeploys. Free tier works for demos but data resets on redeploy.
+
+services:
+  - type: web
+    name: gara-telemedicine
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npm run build && npm install --prefix server --omit=dev
+    startCommand: cd server && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GARA_DB_PATH
+        value: /var/data/gara.db
+      - key: GARA_UPLOADS_PATH
+        value: /var/data/uploads
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: DOCTOR_REGISTRATION_TOKEN
+        sync: false
+      - key: FINANCE_REGISTRATION_TOKEN
+        sync: false
+      - key: PHARMACY_REGISTRATION_TOKEN
+        sync: false
+      - key: GMAIL_SMTP_USER
+        sync: false
+      - key: GMAIL_SMTP_PASS
+        sync: false
+    disk:
+      name: gara-data
+      mountPath: /var/data
+      sizeGB: 1

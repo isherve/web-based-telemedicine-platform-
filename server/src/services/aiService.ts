@@ -20,24 +20,23 @@ export function normLang(v: unknown): Lang {
   return v === 'rw' ? 'rw' : v === 'fr' ? 'fr' : 'en';
 }
 
-/**
- * The AI chatbots operate in English and French only (Kinyarwanda is disabled
- * for AI). This maps the UI language to a supported chatbot language so both the
- * online and offline paths never reply in Kinyarwanda.
- */
+/** Chatbots use the same language codes as the UI (en, rw, fr). */
 export function chatLang(l: Lang): Lang {
-  return l === 'fr' ? 'fr' : 'en';
+  return l;
 }
 
 /**
- * Instruction for conversational assistants: reply in whichever supported
- * language the user actually writes in (English or French), falling back to the
- * selected language when the message language is unclear. Kinyarwanda is not
- * offered by the AI chatbots.
+ * Reply in whichever of the three platform languages the user writes in.
+ * Kinyarwanda must stay pure Ikinyarwanda — never drift into Swahili.
  */
 export function multilingualDirective(preferred: Lang): string {
-  const fallback = preferred === 'fr' ? 'French' : 'English';
-  return `CRITICAL LANGUAGE RULE: You must reply ONLY in English or French. NEVER reply in Kinyarwanda, Swahili, or any other language. If the user writes in French, reply in French. In every other case — including when the user writes in Kinyarwanda, Swahili, mixes languages, or the language is unclear — reply in ${fallback}.`;
+  const fallback = langName(preferred);
+  return `LANGUAGE: Detect the language of the user's latest message and reply in that SAME language (English, Kinyarwanda, or French). When the user writes in Kinyarwanda, reply ONLY in pure Ikinyarwanda as spoken in Rwanda — never use Swahili, English, or French words in the reply (keep medical terms simple). When they write in French, reply in French. When they write in English, reply in English. If the language is unclear, reply in ${fallback}.`;
+}
+
+/** Open-ended assistant — answer any topic the user asks about. */
+function openAssistantDirective(): string {
+  return `SCOPE: You can answer ANY question the user asks — health, the Gara telemedicine platform, general knowledge, education, science, culture, technology, daily life, or anything else. Be helpful, clear, and complete. Do not refuse questions or claim you are limited to one topic. For medical or health topics, give useful information but remind them that their doctor makes the final clinical decision.`;
 }
 
 /** "General guidance, not a diagnosis" disclaimer, localized. */
@@ -442,11 +441,11 @@ async function patientAssistantGroq(
   question: string,
   language: Lang
 ): Promise<AssistantResult> {
-  const system = `You are Gara Health Assistant helping a patient during a telemedicine consultation in Rwanda.
-You are NOT a doctor. Give general health information, explain medical terms simply, suggest when to seek emergency care, and remind them their doctor will make final decisions.
-Never prescribe specific drugs or dosages. Be concise (2-4 sentences). ${multilingualDirective(language)}
+  const system = `You are Gara Health Assistant for a patient in a telemedicine consultation in Rwanda.
+${openAssistantDirective()}
+${multilingualDirective(language)}
 
-Patient context:
+Patient context (use when relevant):
 - Symptoms: ${ctx.symptomCategory ?? 'unknown'} — ${ctx.symptomDescription ?? ''}
 - Severity: ${ctx.severity ?? 'unknown'}
 - Allergies: ${ctx.allergies ?? 'none recorded'}
@@ -455,11 +454,11 @@ ${ctx.aiSuggestions ? `- AI differential (for reference): ${ctx.aiSuggestions.sl
 
   const groqMessages = [
     { role: 'system' as const, content: system },
-    ...messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+    ...messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
     { role: 'user' as const, content: question },
   ];
-  const reply = await callGroqChat(apiKey, groqMessages, 0.5, 400);
-  return { reply, disclaimer: generalDisclaimer(language) };
+  const reply = await callGroqChat(apiKey, groqMessages, 0.6, 700);
+  return { reply };
 }
 
 async function doctorSuggestionsGroq(
@@ -468,13 +467,12 @@ async function doctorSuggestionsGroq(
   chatMessages: { senderIsDoctor: boolean; content: string }[],
   language: Lang
 ): Promise<DoctorSuggestionsResult> {
-  const lang = langName(language);
   const history = chatMessages
     .slice(-8)
     .map((m) => `${m.senderIsDoctor ? 'Doctor' : 'Patient'}: ${m.content}`)
     .join('\n');
   const system = `You are a clinical communication assistant for a doctor in Rwanda. Suggest 3 short, professional reply messages the doctor could send next in the chat.
-Be empathetic, clear, and clinically appropriate. Do not diagnose. Language: ${lang}.
+Be empathetic, clear, and clinically appropriate. ${multilingualDirective(language)}
 Output ONLY valid JSON: {"suggestions":["reply1","reply2","reply3"],"note":"optional brief tip"}
 
 Patient: ${ctx.patientName ?? 'Patient'}
@@ -866,21 +864,19 @@ async function generalAssistantGroq(
       'Help the administrator: system overview stats, user management, changing user roles, doctor leaderboard, audit log, and monitoring platform activity.',
   };
 
-  const system = `You are Gara AI, a helpful assistant for the Gara telemedicine platform in Rwanda.
+  const system = `You are Gara AI, a knowledgeable assistant for users of the Gara telemedicine platform in Rwanda.
 User: ${userName ?? 'User'} | Role: ${role} | Current page: ${page}
-${roleGuide[role] ?? 'Help navigate the Gara platform.'}
-Answer concisely (2-4 sentences). ${multilingualDirective(language)} Never diagnose or prescribe.`;
+${roleGuide[role] ?? 'You know the Gara platform well.'}
+${openAssistantDirective()}
+${multilingualDirective(language)}`;
 
   const groqMessages = [
     { role: 'system' as const, content: system },
-    ...messages.slice(-4).map((m) => ({ role: m.role, content: m.content })),
+    ...messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
     { role: 'user' as const, content: question },
   ];
-  const reply = await callGroqChat(apiKey, groqMessages, 0.5, 350);
-  return {
-    reply,
-    disclaimer: assistantDisclaimer(language),
-  };
+  const reply = await callGroqChat(apiKey, groqMessages, 0.6, 800);
+  return { reply };
 }
 
 function generalAssistantOffline(
@@ -890,6 +886,7 @@ function generalAssistantOffline(
   language: Lang
 ): AssistantResult {
   const rw = language === 'rw';
+  const fr = language === 'fr';
   const q = question.toLowerCase();
 
   const tips: Record<string, { en: string; rw: string }> = {
@@ -935,9 +932,12 @@ function generalAssistantOffline(
   }
 
   const fallback = tips[role] ?? tips.patient;
+  const snippet = question.trim().slice(0, 100);
   return {
     reply: rw
-      ? `${fallback.rw} Uri kuri page: ${page}.`
-      : `${fallback.en} You are on: ${page}.`,
+      ? `${fallback.rw}\n\nUbaza: "${snippet}". Ndashobora gusubiza ibibazo byose neza iyo Groq AI iri online.`
+      : fr
+        ? `${fallback.en}\n\nVotre question : « ${snippet} ». Je peux répondre à toute question lorsque l'IA Groq est en ligne.`
+        : `${fallback.en}\n\nYou asked: "${snippet}". I can answer any question when Groq AI is online. Page: ${page}.`,
   };
 }

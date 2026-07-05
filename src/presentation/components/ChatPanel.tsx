@@ -34,6 +34,30 @@ function fmtDay(iso: string): string {
 
 type ChatView = 'doctor' | 'assistant';
 
+function dedupeMessages(list: Message[]): Message[] {
+  const seen = new Set<string>();
+  return list.filter((m) => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
+}
+
+/** Merge a server message without duplicating optimistic/socket deliveries. */
+function mergeMessage(list: Message[], incoming: Message): Message[] {
+  const withoutPendingMatch = list.filter(
+    (m) =>
+      !(
+        m.pending &&
+        m.senderId === incoming.senderId &&
+        m.messageType === incoming.messageType &&
+        m.content === incoming.content
+      )
+  );
+  if (withoutPendingMatch.some((m) => m.id === incoming.id)) return withoutPendingMatch;
+  return [...withoutPendingMatch, incoming];
+}
+
 export function ChatPanel({ consultation }: { consultation: Consultation }) {
   const { profile } = useAuth();
   const { t, language } = useLocale();
@@ -79,14 +103,18 @@ export function ChatPanel({ consultation }: { consultation: Consultation }) {
     setLoading(true);
     messageService
       .list(consultation.id)
-      .then(setMessages)
+      .then((msgs) => setMessages(dedupeMessages(msgs)))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    return () => {
+      getSocket().emit('leave:consultation', consultation.id);
+    };
   }, [consultation.id, locked]);
 
   useSocketEvent<Message>('message:new', (msg) => {
     if (msg.consultationId === consultation.id) {
-      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      setMessages((prev) => mergeMessage(prev, msg));
     }
   });
 
@@ -130,7 +158,7 @@ export function ChatPanel({ consultation }: { consultation: Consultation }) {
         messageType: temp.messageType,
         content: temp.content ?? '',
       });
-      setMessages((m) => m.map((x) => (x.id === temp.id ? saved : x)));
+      setMessages((m) => mergeMessage(m, saved));
     } catch {
       setMessages((m) => m.map((x) => (x.id === temp.id ? { ...x, pending: false, failed: true } : x)));
     }

@@ -88,6 +88,44 @@ Copy `server/.env.example` → `server/.env` and set:
 
 Staff registration tokens (in `server/.env`): `gara-doctor-2026`, `gara-finance-2026`, `gara-pharmacy-2026`.
 
+## Deploy on Render (live)
+
+Gara ships as **one web service**: the Node backend serves the API, Socket.IO, uploads, and the built React UI from the same URL.
+
+### Quick deploy (Blueprint)
+
+1. Push this repo to GitHub (already done if you cloned from there).
+2. Go to [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**.
+3. Connect the repo `isherve/web-based-telemedicine-platform-`.
+4. Render reads `render.yaml` and creates the **gara-telemedicine** web service.
+5. In the service **Environment** tab, add secrets:
+   - `GROQ_API_KEY` — your Groq key (enables live AI)
+   - `DOCTOR_REGISTRATION_TOKEN`, `FINANCE_REGISTRATION_TOKEN`, `PHARMACY_REGISTRATION_TOKEN` — change from defaults
+6. Click **Deploy**. When the build finishes, open the service URL (e.g. `https://gara-telemedicine.onrender.com`).
+
+### Manual deploy (without Blueprint)
+
+1. **New → Web Service** → connect the GitHub repo.
+2. Settings:
+   - **Build command:** `npm install && npm run build && npm install --prefix server --omit=dev`
+   - **Start command:** `cd server && npm start`
+   - **Health check path:** `/api/health`
+3. Add a **persistent disk** (Starter plan): mount `/var/data`, 1 GB.
+4. Environment variables:
+   - `NODE_ENV` = `production`
+   - `GARA_DB_PATH` = `/var/data/gara.db`
+   - `GARA_UPLOADS_PATH` = `/var/data/uploads`
+   - `GROQ_API_KEY` = (your key)
+5. Deploy.
+
+### After deploy
+
+- Live app: your Render URL (same origin for UI + API — no `VITE_API_URL` needed).
+- Health check: `https://YOUR-SERVICE.onrender.com/api/health`
+- Demo accounts (seeded on first boot) — see table above.
+- **Free tier:** service sleeps after inactivity; SQLite data may reset on redeploy.
+- **Starter plan ($7/mo):** recommended — persistent disk keeps patients, chats, and uploads.
+
 ### Doctor registration token
 Doctor sign-up requires the one-time token in `server/.env`
 (`DOCTOR_REGISTRATION_TOKEN`, default `gara-doctor-2026`).

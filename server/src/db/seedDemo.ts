@@ -24,6 +24,54 @@ function profileId(phoneOrEmail: string): string | null {
   return row?.id ?? null;
 }
 
+/** Create demo staff accounts on first deploy so the live app is usable immediately. */
+export function seedDemoAccounts(): void {
+  ensureStaff('doctor@gara.rw', 'Dr. Kevine', 'docpass123', 'doctor', {
+    clinicName: 'Gara Clinic',
+    consultationFee: 5000,
+    momoNumber: '*182*8*1*0780000000#',
+  });
+  ensureStaff('fin@gara.rw', 'Finance Officer', 'secret123', 'finance');
+  ensureStaff('pharma@gara.rw', 'Pharmacy Staff', 'secret123', 'pharmacy');
+}
+
+function ensureStaff(
+  email: string,
+  fullName: string,
+  password: string,
+  role: 'doctor' | 'finance' | 'pharmacy',
+  extras?: { clinicName?: string; consultationFee?: number; momoNumber?: string }
+): string {
+  const existing = profileId(email);
+  if (existing) return existing;
+
+  const id = randomUUID();
+  const salt = generateSalt();
+  const hash = hashPassword(password, salt);
+  const isDoctor = role === 'doctor' ? 1 : 0;
+
+  db.prepare(
+    `INSERT INTO profiles (
+      id, email, full_name, is_doctor, role, clinic_name,
+      consultation_fee, momo_number, password_hash, password_salt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    email.toLowerCase(),
+    fullName,
+    isDoctor,
+    role,
+    extras?.clinicName ?? null,
+    extras?.consultationFee ?? null,
+    extras?.momoNumber ?? null,
+    hash,
+    salt
+  );
+
+  console.log(`  Demo account created: ${email} (${role})`);
+  return id;
+}
+
 function ensurePatient(
   phone: string,
   fullName: string,

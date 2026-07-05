@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
 import { runMigrations, db } from './db/client.js';
-import { seedDemoData } from './db/seedDemo.js';
+import { seedDemoAccounts, seedDemoData } from './db/seedDemo.js';
 import { authRouter } from './routes/auth.js';
 import { consultationRouter } from './routes/consultations.js';
 import { messageRouter } from './routes/messages.js';
@@ -34,7 +34,9 @@ import { generateSalt, hashPassword } from './services/authService.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const PORT = Number(process.env.PORT ?? 4000);
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
+// Render sets RENDER_EXTERNAL_URL automatically; fall back to localhost for dev.
+const CLIENT_ORIGIN =
+  process.env.CLIENT_ORIGIN ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:5173';
 const isDev = process.env.NODE_ENV !== 'production';
 
 /** Allow any localhost port in dev (Vite may pick 5173, 5174, 5175, …). */
@@ -46,6 +48,7 @@ function isAllowedOrigin(origin: string | undefined): boolean {
 
 // Apply schema on boot (idempotent).
 runMigrations();
+seedDemoAccounts();
 seedDemoData();
 
 // Seed doctor payment defaults if missing (single-doctor instance).
@@ -116,12 +119,17 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 
 // Local file storage for uploads (replaces Supabase Storage).
-const uploadsDir = join(__dirname, '..', 'uploads');
+const uploadsDir = process.env.GARA_UPLOADS_PATH ?? join(__dirname, '..', 'uploads');
 mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, mode: 'offline-local', time: new Date().toISOString() });
+  res.json({
+    ok: true,
+    mode: isDev ? 'development' : 'production',
+    origin: CLIENT_ORIGIN,
+    time: new Date().toISOString(),
+  });
 });
 
 app.use('/api/auth', authRouter);
@@ -140,6 +148,24 @@ app.use('/api/clinical', clinicalRouter);
 app.use('/api/reminders', reminderRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/assignments', assignmentRouter);
+
+// In production, serve the Vite-built React app from the same origin (Render).
+if (!isDev) {
+  const distDir = join(__dirname, '..', '..', 'dist');
+  app.use(express.static(distDir));
+  app.get('*', (req, res, next) => {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/uploads') ||
+      req.path.startsWith('/socket.io')
+    ) {
+      return next();
+    }
+    res.sendFile(join(distDir, 'index.html'), (err) => {
+      if (err) next(err);
+    });
+  });
+}
 
 const server = createServer(app);
 initRealtime(
@@ -199,10 +225,11 @@ server.listen(PORT, () => {
   const aiMode = process.env.GROQ_API_KEY?.trim()
     ? `online (Groq ${process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile'})`
     : 'offline heuristics';
-  console.log(`\n  Gara local backend running`);
+  console.log(`\n  Gara backend running (${isDev ? 'development' : 'production'})`);
   console.log(`  AI:       ${aiMode}`);
-  console.log(`  API:      http://localhost:${PORT}/api`);
-  console.log(`  Uploads:  http://localhost:${PORT}/uploads`);
-  console.log(`  Realtime: ws://localhost:${PORT}\n`);
+  console.log(`  Origin:   ${CLIENT_ORIGIN}`);
+  console.log(`  API:      /api`);
+  console.log(`  Uploads:  /uploads`);
+  console.log(`  Realtime: /socket.io\n`);
   runReminderSweep();
 });
