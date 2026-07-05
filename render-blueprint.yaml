@@ -1,16 +1,15 @@
-# Render Blueprint — deploy Gara as one live web service (API + React UI).
-# Connect this repo in Render: Dashboard → New → Blueprint → select repository.
+# Render API backend (use with Vercel frontend).
+# Deploy this FIRST, then set VITE_API_URL on Vercel to this service URL.
 #
-# Starter plan ($7/mo) recommended: persistent disk keeps SQLite + uploads
-# across redeploys. Free tier works for demos but data resets on redeploy.
+# Vercel hosts the React UI; Render hosts Express + SQLite + Socket.IO.
 
 services:
   - type: web
-    name: gara-telemedicine
+    name: gara-api
     runtime: node
     plan: starter
     region: frankfurt
-    buildCommand: npm install && npm run build && npm install --prefix server --omit=dev
+    buildCommand: npm install --prefix server --omit=dev
     startCommand: cd server && npm start
     healthCheckPath: /api/health
     envVars:
@@ -20,6 +19,8 @@ services:
         value: /var/data/gara.db
       - key: GARA_UPLOADS_PATH
         value: /var/data/uploads
+      - key: CLIENT_ORIGIN
+        sync: false
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
@@ -29,10 +30,6 @@ services:
       - key: FINANCE_REGISTRATION_TOKEN
         sync: false
       - key: PHARMACY_REGISTRATION_TOKEN
-        sync: false
-      - key: GMAIL_SMTP_USER
-        sync: false
-      - key: GMAIL_SMTP_PASS
         sync: false
     disk:
       name: gara-data

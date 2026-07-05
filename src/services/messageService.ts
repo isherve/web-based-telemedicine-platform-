@@ -1,4 +1,4 @@
-import { api } from '../data/api';
+import { api, getApiOrigin } from '../data/api';
 import type { Message } from '../data/types';
 
 export const messageService = {
@@ -13,7 +13,7 @@ export async function uploadFile(file: File | Blob, filename: string): Promise<s
   const form = new FormData();
   form.append('file', file, filename);
   const token = sessionStorage.getItem('gara.session');
-  const res = await fetch('/api/uploads', {
+  const res = await fetch(`${getApiOrigin()}/api/uploads`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,

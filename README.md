@@ -88,43 +88,51 @@ Copy `server/.env.example` → `server/.env` and set:
 
 Staff registration tokens (in `server/.env`): `gara-doctor-2026`, `gara-finance-2026`, `gara-pharmacy-2026`.
 
-## Deploy on Render (live)
+## Deploy live (Vercel + Render) — recommended
 
-Gara ships as **one web service**: the Node backend serves the API, Socket.IO, uploads, and the built React UI from the same URL.
+The **React UI** runs on **Vercel**. The **API** (Express, SQLite, Socket.IO, AI) runs on **Render** — Vercel cannot host SQLite or WebSockets reliably.
 
-### Quick deploy (Blueprint)
+### Step 1 — API on Render
 
-1. Push this repo to GitHub (already done if you cloned from there).
-2. Go to [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**.
-3. Connect the repo `isherve/web-based-telemedicine-platform-`.
-4. Render reads `render.yaml` and creates the **gara-telemedicine** web service.
-5. In the service **Environment** tab, add secrets:
-   - `GROQ_API_KEY` — your Groq key (enables live AI)
-   - `DOCTOR_REGISTRATION_TOKEN`, `FINANCE_REGISTRATION_TOKEN`, `PHARMACY_REGISTRATION_TOKEN` — change from defaults
-6. Click **Deploy**. When the build finishes, open the service URL (e.g. `https://gara-telemedicine.onrender.com`).
+1. Go to [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**.
+2. Connect repo: `isherve/web-based-telemedicine-platform-`
+3. Copy `render-blueprint.yaml` → `render.yaml` in the repo root (or create the service manually from that file). Render Blueprint reads `render.yaml` only.
+4. Render creates **gara-api** from the blueprint.
+4. Set environment variables:
+   - `GROQ_API_KEY` — your Groq key
+   - `DOCTOR_REGISTRATION_TOKEN`, `FINANCE_REGISTRATION_TOKEN`, `PHARMACY_REGISTRATION_TOKEN`
+   - `CLIENT_ORIGIN` — your Vercel URL (set after step 2), e.g. `https://gara.vercel.app`
+5. Deploy. Copy the API URL, e.g. `https://gara-api.onrender.com`
+6. Test: `https://gara-api.onrender.com/api/health` should return `{"ok":true,...}`
 
-### Manual deploy (without Blueprint)
+### Step 2 — Frontend on Vercel
 
-1. **New → Web Service** → connect the GitHub repo.
-2. Settings:
-   - **Build command:** `npm install && npm run build && npm install --prefix server --omit=dev`
-   - **Start command:** `cd server && npm start`
-   - **Health check path:** `/api/health`
-3. Add a **persistent disk** (Starter plan): mount `/var/data`, 1 GB.
-4. Environment variables:
-   - `NODE_ENV` = `production`
-   - `GARA_DB_PATH` = `/var/data/gara.db`
-   - `GARA_UPLOADS_PATH` = `/var/data/uploads`
-   - `GROQ_API_KEY` = (your key)
-5. Deploy.
+1. Go to [Vercel](https://vercel.com/) → **Add New** → **Project** → import `isherve/web-based-telemedicine-platform-`
+2. Framework: **Vite** (auto-detected from `vercel.json`)
+3. Environment variable (required):
 
-### After deploy
+   | Name | Value |
+   |------|--------|
+   | `VITE_API_URL` | `https://gara-api.onrender.com` (your Render URL, no trailing slash) |
 
-- Live app: your Render URL (same origin for UI + API — no `VITE_API_URL` needed).
-- Health check: `https://YOUR-SERVICE.onrender.com/api/health`
-- Demo accounts (seeded on first boot) — see table above.
-- **Free tier:** service sleeps after inactivity; SQLite data may reset on redeploy.
-- **Starter plan ($7/mo):** recommended — persistent disk keeps patients, chats, and uploads.
+4. Click **Deploy**
+5. Open your Vercel URL (e.g. `https://gara.vercel.app`)
+6. Go back to Render → set `CLIENT_ORIGIN` to your Vercel URL → redeploy API if needed
+
+### CLI deploy (optional)
+
+```bash
+npm i -g vercel
+vercel login
+vercel --prod
+# Set VITE_API_URL in the Vercel dashboard → Settings → Environment Variables
+```
+
+### All-in-one on Render (alternative)
+
+To host UI + API on one Render URL (no Vercel), use build command  
+`npm install && npm run build && npm install --prefix server --omit=dev`  
+and leave `VITE_API_URL` empty. The backend serves the built React app.
 
 ### Doctor registration token
 Doctor sign-up requires the one-time token in `server/.env`
