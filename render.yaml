@@ -1,5 +1,5 @@
-# Render API backend (use with Vercel frontend).
-# Copy to render.yaml for Blueprint deploy, or use the render.yaml already in repo root.
+# Render API backend (pairs with Vercel frontend at web-based-telemedicine-platform.vercel.app)
+# Render Blueprint reads this file from the repo root on push to main.
 
 services:
   - type: web

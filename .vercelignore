@@ -1,0 +1,3 @@
+# Ignore Render blueprint when Vercel CLI deploys (prevents services conflict).
+render.yaml
+render-blueprint.yaml
